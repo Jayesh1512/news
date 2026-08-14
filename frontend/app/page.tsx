@@ -1,101 +1,101 @@
-import { getNews, getNewsStats } from '@/lib/api-client';
-import { NewsGrid } from '@/components/news-grid';
-import { SearchBar } from '@/components/search-bar';
-import Link from 'next/link';
+import { getNews } from '@/lib/api-client';
+import { getMockArticles } from '@/lib/mock-data';
+import { Header, Logo } from '@/components/header';
+import { HeroArticle } from '@/components/hero-article';
+import { CompactArticle } from '@/components/compact-article';
+import { Sidebar } from '@/components/sidebar';
+import { CONTENT_CONFIG, SITE_CONFIG, FOOTER_LINKS } from '@/lib/constants';
 
-export const revalidate = 300; // Revalidate every 5 minutes
+export const revalidate = CONTENT_CONFIG.revalidateSeconds;
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: { source?: string; category?: string };
-}) {
-  const articles = await getNews({
-    source: searchParams.source,
-    category: searchParams.category,
-    limit: 30,
-    hours: 48,
-  });
-
-  let stats;
+export default async function Home() {
+  let articles;
+  
   try {
-    stats = await getNewsStats();
+    articles = await getNews({
+      limit: CONTENT_CONFIG.newsLimit,
+      hours: CONTENT_CONFIG.newsHours,
+    });
+    
+    // If no articles from API, use mock data
+    if (!articles || articles.length === 0) {
+      articles = getMockArticles(CONTENT_CONFIG.newsLimit);
+    }
   } catch (error) {
-    console.error('Failed to fetch stats:', error);
-    stats = null;
+    console.log('Using mock data (backend unavailable)');
+    articles = getMockArticles(CONTENT_CONFIG.newsLimit);
   }
 
+  // Split articles for layout
+  const heroArticle = articles[0];
+  const columnArticles = articles.slice(1, 3);
+  const sidebarArticles = articles.slice(3, 10);
+
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black">
-      {/* Header */}
-      <header className="border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-col gap-6">
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-                📰 News Aggregator
-              </h1>
-              <Link
-                href="/stats"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                View Stats
-              </Link>
-            </div>
-            <SearchBar />
-
-            {/* Filters */}
-            <div className="flex gap-2 flex-wrap">
-              <Link
-                href="/"
-                className="px-3 py-1.5 rounded-full text-sm border transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 border-zinc-300 dark:border-zinc-700"
-              >
-                All
-              </Link>
-              <Link
-                href="/?source=rss"
-                className="px-3 py-1.5 rounded-full text-sm border transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 border-zinc-300 dark:border-zinc-700"
-              >
-                RSS Feeds
-              </Link>
-              <Link
-                href="/?source=twitter"
-                className="px-3 py-1.5 rounded-full text-sm border transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 border-zinc-300 dark:border-zinc-700"
-              >
-                Twitter
-              </Link>
-              <Link
-                href="/?category=technology"
-                className="px-3 py-1.5 rounded-full text-sm border transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 border-zinc-300 dark:border-zinc-700"
-              >
-                Technology
-              </Link>
-              <Link
-                href="/?category=general"
-                className="px-3 py-1.5 rounded-full text-sm border transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 border-zinc-300 dark:border-zinc-700"
-              >
-                General
-              </Link>
-            </div>
-
-            {stats && (
-              <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                {stats.total_articles} articles • {stats.recent_24h} in last 24h
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-editorial-cream">
+      <Header />
+      <Logo />
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        <NewsGrid articles={articles} />
+      <main className="max-w-[1400px] mx-auto px-6 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          {/* Left Column - Hero Article */}
+          <div className="lg:col-span-5">
+            {heroArticle && <HeroArticle article={heroArticle} />}
+          </div>
+
+          {/* Middle Column - Two Articles */}
+          <div className="lg:col-span-4 space-y-12">
+            {columnArticles.map((article) => (
+              <CompactArticle key={article.id} article={article} />
+            ))}
+          </div>
+
+          {/* Right Sidebar */}
+          <div className="lg:col-span-3">
+            <Sidebar trendingArticles={sidebarArticles} />
+          </div>
+        </div>
+
+        {/* Bottom Featured Article */}
+        {articles[3] && (
+          <div className="mt-16 border-t pt-12">
+            <div className="max-w-4xl">
+              <div className="bg-editorial-charcoal text-white rounded-lg p-8 flex items-center gap-6">
+                <div className="flex-1">
+                  <h3 className="font-display text-2xl mb-2">
+                    What Happens to Privacy in the New Age of AI
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm text-editorial-muted">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span>{CONTENT_CONFIG.defaultCommentCount}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 mt-20">
-        <div className="container mx-auto px-4 py-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
-          News Aggregator • Built with Next.js and FastAPI
+      <footer className="border-t border-editorial mt-20">
+        <div className="max-w-[1400px] mx-auto px-6 py-8">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-editorial-warm-gray">
+            <p>© 2024 {SITE_CONFIG.name}. All rights reserved.</p>
+            <nav className="flex gap-6">
+              {FOOTER_LINKS.map((link) => (
+                <a 
+                  key={link.href}
+                  href={link.href} 
+                  className="hover:text-editorial-charcoal transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
         </div>
       </footer>
     </div>

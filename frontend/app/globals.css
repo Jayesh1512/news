@@ -1,26 +1,75 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f9f8f6;
+  --foreground: #1a1a1a;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  
+  /* Editorial Typography System */
+  --font-display: "Libre Baskerville", Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  
+  /* Premium Color Palette */
+  --color-cream: #f9f8f6;
+  --color-cream-dark: #eeedeb;
+  --color-border: #e6e4e0;
+  --color-muted: #d1cfc8;
+  --color-charcoal: #1a1a1a;
+  --color-charcoal-light: #2a2a2a;
+  --color-warm-gray: #6b6b6b;
+  --color-accent: #e63946;
+  --color-accent-hover: #d62839;
+  
+  /* Brand Social Colors */
+  --color-twitter: #1da1f2;
+  --color-twitter-hover: #1a8cd8;
+  --color-facebook: #4267b2;
+  --color-facebook-hover: #365899;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+}
+
+/* Custom Utility Classes */
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+/* Editorial Color Classes */
+.bg-editorial-cream { background-color: var(--color-cream); }
+.bg-editorial-cream-dark { background-color: var(--color-cream-dark); }
+.bg-editorial-charcoal { background-color: var(--color-charcoal); }
+.bg-editorial-charcoal-light { background-color: var(--color-charcoal-light); }
+.bg-editorial-accent { background-color: var(--color-accent); }
+
+.text-editorial-charcoal { color: var(--color-charcoal); }
+.text-editorial-warm-gray { color: var(--color-warm-gray); }
+.text-editorial-muted { color: var(--color-muted); }
+.text-editorial-accent { color: var(--color-accent); }
+
+.border-editorial { border-color: var(--color-border); }
+
+.hover\:bg-editorial-cream-dark:hover { background-color: var(--color-cream-dark); }
+.hover\:bg-editorial-charcoal:hover { background-color: var(--color-charcoal); }
+.hover\:bg-editorial-charcoal-light:hover { background-color: var(--color-charcoal-light); }
+.hover\:bg-editorial-accent-hover:hover { background-color: var(--color-accent-hover); }
+
+.hover\:text-editorial-warm-gray:hover { color: var(--color-warm-gray); }
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
 }

@@ -8,20 +8,15 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 ┌─────────────────┐         ┌──────────────────┐
 │   Next.js       │  HTTP   │   FastAPI        │
 │   Frontend      │ ──────> │   Backend        │
-│   (Port 3000)   │         │   (Port 8000)    │
+│   (Port 3001)   │         │   (Port 8001)    │
 └─────────────────┘         └──────────────────┘
                                      │
                             ┌────────┼────────┐
                             │        │        │
                        ┌────▼────┐  │  ┌─────▼────────┐
-                       │PostgreSQL│  │  │   Twitter    │
-                       │Database  │  │  │   Scraper    │
-                       └──────────┘  │  │ (Playwright) │
-                                     │  └──────────────┘
-                                ┌────▼────┐
-                                │  Redis  │
-                                │         │
-                                └─────────┘
+                       │PostgreSQL│  │  │   Redis      │
+                       │Database  │  │  │  (Port 6380) │
+                       └──────────┘  │  └──────────────┘
                                      │
                                 ┌────▼────┐
                                 │ Celery  │
@@ -40,10 +35,11 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 - **Caching**: Redis for Celery task queue
 
 ### Twitter Scraper
-- **Status:** ❌ Not operational (Docker build fails)
-- **Code written:** scraper.py complete but cannot be containerized
-- **Recommendation:** Use official Twitter API instead of web scraping
-- **See:** `twitter-scraper/STATUS.md` for details and alternatives
+- **Status:** ❌ **NOT OPERATIONAL** (Docker build fails on ARM64)
+- **Tested:** 2026-08-14 - Build fails, runtime fails, zero Twitter articles in database
+- **Root cause:** Playwright dependencies incompatible with ARM64 Debian Trixie
+- **Recommendation:** Use official Twitter API v2 instead of web scraping
+- **See:** [`STATUS.md`](./STATUS.md) for acceptance test evidence and alternatives
 
 ### Frontend (Next.js 16)
 - **Server Components**: Fast, SEO-friendly pages
@@ -73,9 +69,9 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
    ```
 
 3. **Access the application**:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+   - Frontend: http://localhost:3001
+   - Backend API: http://localhost:8001
+   - API Docs: http://localhost:8001/docs
 
 4. **Initial data**:
    The RSS scraper will automatically start fetching articles every 15 minutes. You can trigger it manually:
@@ -213,63 +209,23 @@ news/
 
 **Interactive docs**: http://localhost:8000/docs
 
-## 🐦 Twitter/X Scraping Setup
+## 🐦 Twitter/X Scraping - Not Available
 
-The Twitter scraper runs as a **separate service** using Playwright (headless Chromium). It's ready to use but requires configuration when you need it.
+**Status:** The Twitter scraper is not operational and cannot be built on ARM64 systems.
 
-### Current Status
-✅ Container built and configured  
-✅ Scrapes from: @elonmusk, @OpenAI, @verge, @techcrunch, @wired  
-✅ Posts tweets directly to backend API  
-⏳ **Awaiting authentication setup** (Twitter login required)
+### What Happened
+- ❌ Docker build fails on Playwright dependencies (ARM64 Debian Trixie incompatibility)
+- ❌ Runtime fails with missing Python packages (`pkg_resources`)
+- ❌ Zero Twitter articles in database (verified via acceptance tests 2026-08-14)
 
-### Quick Start (No Auth - Limited)
-```bash
-# Scraper runs automatically with docker-compose up
-# Will attempt to scrape public tweets without login
-# May be limited by Twitter's restrictions
-```
+### Recommendation: Use Twitter API v2
+For production Twitter integration, use the official API instead:
+- More reliable than browser scraping
+- Better rate limits and compliance with Twitter ToS
+- No dependency or platform issues
+- **Get started:** https://developer.twitter.com/en/docs/twitter-api
 
-### Full Setup (With Authentication)
-Twitter requires login for full access. Add credentials to enable authenticated scraping:
-
-1. **Edit `docker-compose.yml`** to add Twitter credentials:
-   ```yaml
-   twitter-scraper:
-     environment:
-       TWITTER_USERNAME: your_username
-       TWITTER_PASSWORD: your_password
-   ```
-
-2. **Or mount a cookies file** (safer):
-   ```yaml
-   twitter-scraper:
-     volumes:
-       - ./twitter-scraper/cookies.json:/app/cookies.json
-   ```
-
-3. **Restart the scraper**:
-   ```bash
-   docker-compose restart twitter-scraper
-   ```
-
-### Configure Accounts
-Edit `TWITTER_ACCOUNTS` in `docker-compose.yml`:
-```yaml
-TWITTER_ACCOUNTS: elonmusk,OpenAI,verge,techcrunch,wired,YourAccount
-```
-
-### Check Scraper Logs
-```bash
-docker logs -f news-twitter-scraper
-```
-
-### Alternative: Use Official Twitter API
-For production, consider using the Twitter API instead:
-- More reliable than web scraping
-- Better rate limits
-- Requires Twitter Developer account (free tier available)
-- See `twitter-scraper/README.md` for details
+See [`STATUS.md`](./STATUS.md) for complete acceptance test evidence and attempted solutions.
 
 ## 📊 Data Flow
 
