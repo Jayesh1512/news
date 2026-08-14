@@ -33,18 +33,17 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 ## ✨ Features
 
 ### Backend (FastAPI)
-- **Multi-source scraping**: RSS feeds + Twitter/X scraper (Playwright-based)
+- **RSS scraping**: Working out of the box - Google News, Ars Technica, The Verge
 - **Background tasks**: Celery for scheduled scraping every 15 minutes
 - **RESTful API**: Clean, documented API with automatic OpenAPI docs
 - **Database**: PostgreSQL with SQLAlchemy ORM
 - **Caching**: Redis for Celery task queue
 
 ### Twitter Scraper
-- **Headless browser**: Chromium with stealth mode to avoid detection
-- **Configurable accounts**: Scrape from multiple Twitter accounts (elonmusk, OpenAI, verge, etc.)
-- **Auto-save**: Posts directly to backend API
-- **Periodic scraping**: Runs independently every 15 minutes
-- **Ready for setup**: Container built and ready, you configure authentication when needed
+- **Status:** ❌ Not operational (Docker build fails)
+- **Code written:** scraper.py complete but cannot be containerized
+- **Recommendation:** Use official Twitter API instead of web scraping
+- **See:** `twitter-scraper/STATUS.md` for details and alternatives
 
 ### Frontend (Next.js 16)
 - **Server Components**: Fast, SEO-friendly pages

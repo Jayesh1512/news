@@ -2,7 +2,7 @@
 
 ## Current Status
 ✅ **Core working** - RSS scraper + backend + frontend verified  
-✅ **Twitter scraper ready** - code complete, awaiting your build + auth
+❌ **Twitter scraper** - Build failed, not operational (use official API instead)
 
 ## Run the Working Stack
 
@@ -10,13 +10,13 @@
 # Start everything (PostgreSQL, Redis, Backend, Celery, Frontend)
 docker-compose up
 
-# Or just backend + frontend
-docker-compose up postgres redis backend frontend
+# Or run in background
+docker-compose up -d
 ```
 
 Access:
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:8000/docs
+- **Frontend:** http://localhost:3001 (changed from 3000 due to port conflicts)
+- **Backend API:** http://localhost:8001/docs (changed from 8000)
 - **Database:** `postgresql://newsuser:newspass@localhost:5432/newsdb`
 
 ## What You'll See
@@ -27,35 +27,26 @@ Access:
 - Dark mode support
 - Auto-refresh every 15 minutes
 
-## Add Twitter Scraping
+## Port Changes
 
-When ready:
+**Due to OrbStack conflicts, ports have changed:**
+- Frontend: 3000 → **3001**
+- Backend: 8000 → **8001**
+- Redis: 6379 → **6380**
 
-1. **Build the Twitter container** (5-10 min first time):
-   ```bash
-   docker-compose build twitter-scraper
-   ```
+See `PORTS.md` for details.
 
-2. **(Optional) Add credentials** in `docker-compose.yml`:
-   ```yaml
-   twitter-scraper:
-     environment:
-       TWITTER_USERNAME: your_username
-       TWITTER_PASSWORD: your_password
-   ```
+## About Twitter Scraping
 
-3. **Start it**:
-   ```bash
-   docker-compose up twitter-scraper
-   ```
+The Twitter scraper **does not work** - Docker build fails on ARM64 system dependencies.
 
-4. **See results**:
-   ```bash
-   docker logs -f news-twitter-scraper
-   curl http://localhost:8000/api/news/?source=twitter
-   ```
+**Recommendation:** Use the official Twitter API instead.
 
-Full setup guide: `twitter-scraper/SETUP.md`
+See `twitter-scraper/STATUS.md` for:
+- What went wrong
+- Why it failed
+- How to use Twitter API v2 (free tier available)
+- Alternative approaches
 
 ## Stop Everything
 
