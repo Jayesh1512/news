@@ -7,7 +7,6 @@ import asyncio
 import httpx
 from datetime import datetime
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth_async
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -119,7 +118,8 @@ async def scrape_all_accounts():
         )
         
         page = await context.new_page()
-        await stealth_async(page)  # Apply stealth techniques
+        # Note: Running without stealth mode - may be detected by Twitter
+        # Add authentication or use official Twitter API for production
         
         all_tweets = []
         

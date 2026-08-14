@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -24,7 +22,7 @@ services:
     image: redis:7-alpine
     container_name: news-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"  # Changed to 6380 to avoid conflict with existing Redis
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -38,7 +36,7 @@ services:
       dockerfile: Dockerfile
     container_name: news-backend
     ports:
-      - "8000:8000"
+      - "8001:8000"  # Changed to 8001 to avoid conflict
     environment:
       DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
       REDIS_URL: redis://redis:6379/0
@@ -97,7 +95,7 @@ services:
       dockerfile: Dockerfile
     container_name: news-twitter-scraper
     environment:
-      BACKEND_URL: http://backend:8000
+      BACKEND_URL: http://backend:8000  # Internal network, not localhost
       TWITTER_ACCOUNTS: elonmusk,OpenAI,verge,techcrunch,wired
       SCRAPE_INTERVAL: 900  # 15 minutes
     depends_on:
@@ -112,15 +110,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_API_URL: http://localhost:8001
     container_name: news-frontend
     ports:
-      - "3000:3000"
+      - "3001:3000"  # Changed to 3001 to avoid conflict
     environment:
       # Server-side: use Docker internal network
       API_URL_SERVER: http://backend:8000
-      # Client-side (browser): use localhost
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      # Client-side (browser): use localhost:8001
+      NEXT_PUBLIC_API_URL: http://localhost:8001
     depends_on:
       - backend
     extra_hosts:
