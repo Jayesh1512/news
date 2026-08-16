@@ -30,7 +30,16 @@ services:
       API_TITLE: News Aggregator API
       API_VERSION: 0.1.0
       SCRAPE_INTERVAL_MINUTES: 15
+      SCRAPE_TWITTER_INTERVAL_HOURS: 6
       MAX_ARTICLES_PER_SOURCE: 50
+      TWITTER_POSTS_PER_ACCOUNT: 20
+      # Supabase (stores scraped Twitter posts) - set in a repo-root .env
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_KEY: ${SUPABASE_KEY:-}
+      SUPABASE_TWITTER_TABLE: ${SUPABASE_TWITTER_TABLE:-twitter_posts}
+      # Twitter/X cookie auth (see twitter-scraper/README.md for how to get these)
+      TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN:-}
+      TWITTER_CT0: ${TWITTER_CT0:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,6 +59,13 @@ services:
     environment:
       DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
       REDIS_URL: redis://redis:6379/0
+      SCRAPE_TWITTER_INTERVAL_HOURS: 6
+      TWITTER_POSTS_PER_ACCOUNT: 20
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_KEY: ${SUPABASE_KEY:-}
+      SUPABASE_TWITTER_TABLE: ${SUPABASE_TWITTER_TABLE:-twitter_posts}
+      TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN:-}
+      TWITTER_CT0: ${TWITTER_CT0:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +85,13 @@ services:
     environment:
       DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
       REDIS_URL: redis://redis:6379/0
+      SCRAPE_TWITTER_INTERVAL_HOURS: 6
+      TWITTER_POSTS_PER_ACCOUNT: 20
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_KEY: ${SUPABASE_KEY:-}
+      SUPABASE_TWITTER_TABLE: ${SUPABASE_TWITTER_TABLE:-twitter_posts}
+      TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN:-}
+      TWITTER_CT0: ${TWITTER_CT0:-}
     depends_on:
       postgres:
         condition: service_healthy

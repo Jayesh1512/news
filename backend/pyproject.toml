@@ -16,6 +16,8 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "httpx>=0.27.2",
     "feedparser>=6.0.11",
+    "supabase>=2.31.0",
+    "twitter-cli>=0.8.5",
 ]
 
 [build-system]

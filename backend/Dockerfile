@@ -14,11 +14,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 # Copy dependency files
 COPY pyproject.toml ./
 
-# Install dependencies with UV
+# Install dependencies with UV. This includes twitter-cli (see
+# pyproject.toml), whose `twitter` console script lands in the system
+# Python's bin/ dir and is used by app/scrapers/twitter.py to fetch posts.
 RUN uv pip install --system -r pyproject.toml
-
-# Install additional tools (optional, for Agent-Reach)
-# RUN pip install agent-reach
 
 # Copy application code
 COPY ./app ./app

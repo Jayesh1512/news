@@ -23,16 +23,24 @@ class Settings(BaseSettings):
     
     # Database
     database_url: str = "postgresql://newsuser:newspass@localhost:5432/newsdb"
-    
+
+    # Supabase (used to store scraped Twitter/X posts)
+    supabase_url: str = ""
+    supabase_key: str = ""  # service_role key (needed for server-side writes)
+    supabase_twitter_table: str = "twitter_posts"
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
-    
+
     # Twitter
     twitter_auth_token: str = ""
     twitter_ct0: str = ""
-    
+    twitter_posts_per_account: int = 5
+    twitter_cli_timeout_seconds: int = 60
+
     # Scraping
     scrape_interval_minutes: int = 15
+    scrape_twitter_interval_hours: int = 6
     max_articles_per_source: int = 50
 
 

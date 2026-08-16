@@ -4,10 +4,41 @@ FastAPI backend for the news aggregator application.
 
 ## Features
 
-- **Multi-source scraping**: RSS feeds, Twitter/X (via Agent-Reach)
+- **Multi-source scraping**: RSS feeds (Postgres), Twitter/X (Supabase)
 - **Background tasks**: Celery for scheduled scraping
-- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Database**: PostgreSQL with SQLAlchemy ORM (RSS articles) + Supabase (Twitter posts)
 - **API**: RESTful API with automatic documentation
+
+## Twitter/X scraping (Supabase)
+
+Every `SCRAPE_TWITTER_INTERVAL_HOURS` (default 6h), the `scrape_twitter_accounts`
+Celery task fetches recent posts for each account in
+[`app/core/constants.py`](app/core/constants.py) `TWITTER_ACCOUNTS` via
+[`twitter-cli`](https://github.com/jackwener/twitter-cli) and upserts them
+into a Supabase table (deduped by `tweet_id`).
+
+**Setup:**
+
+1. **Edit the account list**: `app/core/constants.py` → `TWITTER_ACCOUNTS`
+   (bare handles, no `@`).
+2. **Create the Supabase table**: run [`supabase_schema.sql`](supabase_schema.sql)
+   in your Supabase project's SQL editor.
+3. **Configure credentials** in `.env` (see `.env.example`):
+   - `SUPABASE_URL` / `SUPABASE_KEY` (service_role key - from Supabase
+     project Settings > API)
+   - `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` (cookie auth for twitter-cli - see
+     [`../twitter-scraper/README.md`](../twitter-scraper/README.md) for how
+     to export these with Cookie-Editor)
+4. Restart `celery-worker` and `celery-beat` (or the whole backend stack).
+
+Trigger a run manually instead of waiting for the schedule:
+
+```bash
+docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_twitter_accounts; print(scrape_twitter_accounts())"
+```
+
+If Supabase or Twitter credentials aren't configured, the task returns
+`{"status": "skipped", ...}` instead of failing.
 
 ## Setup
 
@@ -91,8 +122,8 @@ docker run -p 8000:8000 --env-file .env news-backend
 backend/
 ├── app/
 │   ├── api/              # API routes
-│   ├── core/             # Configuration
-│   ├── db/               # Database setup
+│   ├── core/             # Configuration + constants (TWITTER_ACCOUNTS)
+│   ├── db/               # Database setup (Postgres session + Supabase client)
 │   ├── models/           # SQLAlchemy models
 │   ├── schemas/          # Pydantic schemas
 │   ├── scrapers/         # Scraper implementations
@@ -100,5 +131,6 @@ backend/
 │   └── main.py           # FastAPI application
 ├── Dockerfile
 ├── pyproject.toml        # UV configuration
+├── supabase_schema.sql   # Twitter posts table DDL
 └── .env.example
 ```

@@ -48,3 +48,8 @@ logs/
 # UV
 .uv/
 uv.lock
+
+# Celery beat runtime schedule DB (binary, regenerated at runtime)
+celerybeat-schedule
+celerybeat-schedule.*
+celerybeat.pid
