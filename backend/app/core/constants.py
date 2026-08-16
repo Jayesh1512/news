@@ -9,9 +9,5 @@ gathers posts from.
 # X/Twitter accounts to fetch posts from, every SCRAPE_TWITTER_INTERVAL_HOURS
 # (see app.core.config.Settings). Bare handles, no leading "@", no URL.
 TWITTER_ACCOUNTS: list[str] = [
-    "elonmusk",
-    "OpenAI",
-    "verge",
-    "techcrunch",
-    "wired",
+    "variational_io",
 ]

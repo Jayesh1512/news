@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api import news, sources
+from app.api import news, sources, twitter
 from app.db.session import engine, Base
 
 # Create database tables
@@ -25,6 +25,7 @@ app.add_middleware(
 # Include routers
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(sources.router, prefix="/api/sources", tags=["sources"])
+app.include_router(twitter.router, prefix="/api/twitter", tags=["twitter"])
 
 
 @app.get("/")

@@ -48,3 +48,24 @@ class SourceResponse(SourceBase):
     id: int
     last_scraped_at: Optional[datetime] = None
     created_at: datetime
+
+
+class TwitterPostResponse(BaseModel):
+    """Schema for a scraped Twitter/X post (from Supabase twitter_posts)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    tweet_id: str
+    account: str
+    author: str
+    author_name: Optional[str] = None
+    text: str
+    url: str
+    is_retweet: bool = False
+    lang: Optional[str] = None
+    likes: int = 0
+    retweets: int = 0
+    replies: int = 0
+    views: int = 0
+    media_url: Optional[str] = None
+    published_at: Optional[datetime] = None
+    fetched_at: datetime
