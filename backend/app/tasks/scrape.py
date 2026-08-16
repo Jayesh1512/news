@@ -100,8 +100,10 @@ def scrape_twitter_accounts():
 
     total_fetched = 0
     total_upserted = 0
+    total_dropped_stale = 0
     auth_failures = 0
     per_account: dict[str, dict] = {}
+    max_age_hours = settings.scrape_twitter_interval_hours
 
     for i, account in enumerate(TWITTER_ACCOUNTS):
         tweets, error_code = scraper.fetch_account_posts(account, settings.twitter_posts_per_account)
@@ -110,10 +112,13 @@ def scrape_twitter_accounts():
             auth_failures += 1
 
         records = []
+        dropped_stale = 0
         for tweet in tweets:
-            record = TwitterScraper.tweet_to_record(tweet, account)
+            record = TwitterScraper.tweet_to_record(tweet, account, max_age_hours=max_age_hours)
             if record:
                 records.append(record)
+            else:
+                dropped_stale += 1
 
         upserted = 0
         if records:
@@ -122,12 +127,18 @@ def scrape_twitter_accounts():
                 upserted = len(records)
             except Exception as exc:
                 logger.error("Supabase upsert failed for @%s: %s", account, exc)
-                per_account[account] = {"fetched": len(tweets), "upserted": 0, "error": str(exc)}
+                per_account[account] = {"fetched": len(tweets), "upserted": 0, "dropped_stale": dropped_stale, "error": str(exc)}
                 continue
 
-        per_account[account] = {"fetched": len(tweets), "upserted": upserted, "error_code": error_code}
+        per_account[account] = {
+            "fetched": len(tweets),
+            "upserted": upserted,
+            "dropped_stale": dropped_stale,
+            "error_code": error_code,
+        }
         total_fetched += len(tweets)
         total_upserted += upserted
+        total_dropped_stale += dropped_stale
 
         # Small delay between accounts to be gentle on X's rate limits.
         if i < len(TWITTER_ACCOUNTS) - 1:
@@ -146,8 +157,10 @@ def scrape_twitter_accounts():
     return {
         "status": "auth_failed" if fully_auth_failed else "success",
         "accounts": len(TWITTER_ACCOUNTS),
+        "max_age_hours": max_age_hours,
         "total_fetched": total_fetched,
         "total_upserted": total_upserted,
+        "total_dropped_stale": total_dropped_stale,
         "per_account": per_account,
     }
 

@@ -17,6 +17,14 @@ Celery task fetches recent posts for each account in
 [`twitter-cli`](https://github.com/jackwener/twitter-cli) and upserts them
 into a Supabase table (deduped by `tweet_id`).
 
+**Freshness filter**: posts older than `SCRAPE_TWITTER_INTERVAL_HOURS` (by
+`published_at`, not fetch time) are dropped before they ever reach the
+database - they never get inserted or upserted. This keeps the table
+matching "what's new since last run" rather than accumulating an account's
+entire recent history. If an account hasn't posted within the window, that
+run correctly upserts 0 rows for it (see `dropped_stale` in the task
+result) - this is expected, not a bug.
+
 **Setup:**
 
 1. **Edit the account list**: `app/core/constants.py` → `TWITTER_ACCOUNTS`

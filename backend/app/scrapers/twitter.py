@@ -9,7 +9,10 @@ import json
 import logging
 import os
 import subprocess
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+from dateutil import parser as date_parser
 
 from app.core.config import settings
 
@@ -113,12 +116,45 @@ class TwitterScraper:
         return [], None
 
     @staticmethod
-    def tweet_to_record(tweet: Dict[str, Any], account: str) -> Optional[Dict[str, Any]]:
-        """Normalize a twitter-cli tweet dict to a Supabase twitter_posts row."""
+    def tweet_to_record(
+        tweet: Dict[str, Any],
+        account: str,
+        max_age_hours: Optional[float] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Normalize a twitter-cli tweet dict to a Supabase twitter_posts row.
+
+        Returns None (dropped) if the tweet is missing required fields, or
+        if `max_age_hours` is set and the tweet's published_at is older than
+        that many hours - stale posts never reach the database.
+        """
         tweet_id = tweet.get("id")
         text = (tweet.get("text") or "").strip()
         if not tweet_id or not text:
             return None
+
+        published_raw = tweet.get("createdAtISO") or tweet.get("createdAt") or None
+
+        if max_age_hours is not None:
+            if not published_raw:
+                # No timestamp to judge freshness by - safer to drop than
+                # to silently let an unknown-age post through the filter.
+                logger.debug("Dropping tweet %s (@%s): no published_at to check age", tweet_id, account)
+                return None
+            try:
+                published_dt = date_parser.parse(published_raw)
+                if published_dt.tzinfo is None:
+                    published_dt = published_dt.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError) as exc:
+                logger.debug("Dropping tweet %s (@%s): unparseable published_at %r (%s)", tweet_id, account, published_raw, exc)
+                return None
+
+            age = datetime.now(timezone.utc) - published_dt
+            if age > timedelta(hours=max_age_hours):
+                logger.debug(
+                    "Dropping tweet %s (@%s): published %.1fh ago, older than max_age_hours=%s",
+                    tweet_id, account, age.total_seconds() / 3600, max_age_hours,
+                )
+                return None
 
         author = tweet.get("author") or {}
         author_handle = author.get("screenName") or account
@@ -144,6 +180,6 @@ class TwitterScraper:
             "replies": int(metrics.get("replies") or 0),
             "views": int(metrics.get("views") or 0),
             "media_url": media_url,
-            "published_at": tweet.get("createdAtISO") or tweet.get("createdAt") or None,
+            "published_at": published_raw,
             "raw": tweet,
         }
