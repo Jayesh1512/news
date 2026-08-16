@@ -35,7 +35,7 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 - **Caching**: Redis for Celery task queue
 
 ### Twitter Scraper
-- **Status:** ✅ Given a list of X/Twitter profile URLs, fetches each profile's most recent posts. Built on [`twitter-cli`](https://github.com/jackwener/twitter-cli) (Agent-Reach's Twitter backend) - no browser/Chromium, talks straight to X's API.
+- **Status:** ✅ Given a list of X/Twitter profile URLs, fetches each profile's most recent posts. Built directly on [Agent-Reach](https://github.com/Panniantong/Agent-Reach), which provisions and health-checks the Twitter backend (currently `twitter-cli`) - no browser/Chromium.
 - **Auth:** required. Set `TWITTER_AUTH_TOKEN`/`TWITTER_CT0` from a logged-in x.com session (throwaway account recommended).
 - **See:** [`twitter-scraper/README.md`](./twitter-scraper/README.md) for setup, profile URL config, and cookie export instructions.
 
@@ -186,7 +186,7 @@ news/
 │   │   └── layout.tsx          # Root layout
 │   ├── Dockerfile
 │   └── package.json
-├── twitter-scraper/             # twitter-cli based Twitter/X profile scraper
+├── twitter-scraper/             # Agent-Reach based Twitter/X profile scraper
 │   ├── Dockerfile
 │   └── scraper.py
 ├── docker-compose.postgres.yml         # Postgres, standalone
@@ -222,7 +222,7 @@ news/
 
 ## 🐦 Twitter/X Scraping
 
-**Status:** ✅ Operational, given profile URLs to follow. Built on `twitter-cli` (no browser dependency, so no ARM64/Playwright issues).
+**Status:** ✅ Operational, given profile URLs to follow. Built directly on [Agent-Reach](https://github.com/Panniantong/Agent-Reach) (installed from its GitHub source), which provisions and health-checks the Twitter backend - no browser dependency, so no ARM64/Playwright issues.
 
 Give it a comma-separated list of profile URLs via `TWITTER_PROFILE_URLS` in
 `docker-compose.twitter-scraper.yml`; it fetches each profile's most recent

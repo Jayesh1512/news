@@ -1,8 +1,13 @@
-"""Twitter/X profile scraper using twitter-cli (Agent-Reach's twitter backend).
+"""Twitter/X profile scraper powered by Agent-Reach (Panniantong/agent-reach).
 
 Given a list of profile URLs (e.g. https://x.com/elonmusk), fetches each
-profile's most recent posts via `twitter user-posts <handle> --json` and
-POSTs them to the backend's /api/news/ endpoint.
+profile's most recent posts and POSTs them to the backend's /api/news/
+endpoint.
+
+Agent-Reach is installed in the image and used to provision + health-check
+the Twitter backend (currently twitter-cli, per Agent-Reach's own routing -
+see `agent-reach doctor`). The actual per-profile fetch shells out to
+whatever CLI Agent-Reach selected, via `twitter user-posts <handle> --json`.
 
 No browser/Chromium involved: twitter-cli talks to X's internal API directly
 using cookie auth (TWITTER_AUTH_TOKEN + TWITTER_CT0).
@@ -11,7 +16,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import subprocess
 import sys
 from urllib.parse import urlparse
@@ -74,6 +78,42 @@ def handle_from_url(url_or_handle: str) -> str | None:
         return None
 
     return handle
+
+
+def log_agent_reach_status() -> None:
+    """Run `agent-reach doctor --json` and log the Twitter channel status.
+
+    Purely diagnostic: doctor only inspects installed backends and explicit
+    credentials, it never triggers a live X request. This gives operators a
+    quick read on whether Agent-Reach considers the Twitter backend healthy
+    without duplicating its channel-selection logic here.
+    """
+    try:
+        result = subprocess.run(
+            ["agent-reach", "doctor", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        logger.warning("Could not run `agent-reach doctor`: %s", exc)
+        return
+
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        logger.warning("agent-reach doctor produced non-JSON output")
+        return
+
+    twitter_status = report.get("twitter", {})
+    logger.info(
+        "Agent-Reach twitter channel: status=%s backend=%s",
+        twitter_status.get("status", "unknown"),
+        twitter_status.get("active_backend") or ", ".join(twitter_status.get("backends", [])),
+    )
+    message = twitter_status.get("message")
+    if message and twitter_status.get("status") != "ok":
+        logger.info("Agent-Reach says: %s", message)
 
 
 def run_twitter_cli(handle: str, count: int) -> list[dict]:
@@ -233,15 +273,18 @@ async def scrape_all_profiles() -> None:
 
 
 async def main() -> None:
-    logger.info("Twitter scraper (twitter-cli) started.")
+    logger.info("Twitter scraper (Agent-Reach) started.")
     logger.info("Profiles: %s", ", ".join(PROFILE_URLS) or "(none configured)")
     logger.info("Posts per profile: %d, interval: %ds", POSTS_PER_PROFILE, SCRAPE_INTERVAL)
 
+    await asyncio.to_thread(log_agent_reach_status)
+
     if not TWITTER_AUTH_TOKEN or not TWITTER_CT0:
         logger.warning(
-            "TWITTER_AUTH_TOKEN / TWITTER_CT0 not set. twitter-cli requires cookie "
-            "auth and cannot fall back to a browser inside this container, so "
-            "requests will fail until these are configured."
+            "TWITTER_AUTH_TOKEN / TWITTER_CT0 not set. The Agent-Reach Twitter "
+            "backend requires cookie auth and cannot fall back to a browser "
+            "inside this container, so requests will fail until these are "
+            "configured."
         )
 
     while True:
@@ -256,6 +299,7 @@ async def main() -> None:
 
 if __name__ == "__main__":
     if "--once" in sys.argv:
+        log_agent_reach_status()
         asyncio.run(scrape_all_profiles())
     else:
         asyncio.run(main())

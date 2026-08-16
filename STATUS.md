@@ -8,23 +8,29 @@
 - **FastAPI Backend**: Serving at http://localhost:8001
 - **Next.js Frontend**: Serving at http://localhost:3001
 - **Celery Workers**: Processing scheduled tasks
-- **Twitter Scraper**: Rebuilt on `twitter-cli` (2026-08-16, see below)
+- **Twitter Scraper**: Rebuilt on Agent-Reach (2026-08-16, see below)
 
-## Twitter Scraper - Rebuilt on twitter-cli (2026-08-16)
+## Twitter Scraper - Rebuilt on Agent-Reach (2026-08-16)
 
 **History**: the original scraper used Playwright/Chromium and failed to
 build on ARM64 (`playwright install-deps chromium` on `python:3.11-slim`
 tried to apt-install font packages that don't exist under those names on
 Debian Trixie). A follow-up fix switched to Microsoft's official Playwright
 image and got it building/running, but anonymous browser scraping remained
-rate-limited by X.
+rate-limited by X. It was then rebuilt around `twitter-cli` directly, then
+finally rebuilt again to install and use the actual
+[Agent-Reach](https://github.com/Panniantong/Agent-Reach) project (per
+explicit request), so the container tracks upstream's chosen Twitter backend
+instead of hardcoding one.
 
-**Current approach**: the scraper no longer uses a browser at all. It shells
-out to [`twitter-cli`](https://github.com/jackwener/twitter-cli) - the same
-backend [Agent-Reach](https://github.com/Panniantong/Agent-Reach) uses for
-Twitter/X - which talks directly to X's internal GraphQL API via cookie auth
-(`TWITTER_AUTH_TOKEN` / `TWITTER_CT0`). This removes the Chromium/ARM64 build
-problem entirely and is a plain `python:3.12-slim` image.
+**Current approach**: the image installs Agent-Reach from its GitHub source
+via `pipx` (Agent-Reach is *not* the "agent-reach" package on PyPI - that's
+an unrelated project) and runs its own installer,
+`agent-reach install --channels=twitter`, which currently provisions
+`twitter-cli`. No browser at all - `twitter-cli` talks directly to X's
+internal GraphQL API via cookie auth (`TWITTER_AUTH_TOKEN` / `TWITTER_CT0`).
+On startup the scraper logs `agent-reach doctor`'s Twitter channel status
+before scraping.
 
 Given a list of profile URLs in `TWITTER_PROFILE_URLS`, it runs
 `twitter user-posts <handle> --json` per profile and posts the most recent

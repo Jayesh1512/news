@@ -10,10 +10,12 @@ class TwitterScraper(BaseScraper):
 
     The actual, working Twitter/X scraper is the standalone
     `twitter-scraper/` Docker service (see docker-compose.twitter-scraper.yml
-    and twitter-scraper/README.md). Given a list of profile URLs, it uses
-    `twitter-cli` to fetch each profile's most recent posts and POSTs them to
-    this backend's `/api/news/` endpoint directly - it does not go through
-    this class or the `scrape_twitter` Celery task below.
+    and twitter-scraper/README.md). It installs and uses Agent-Reach
+    (https://github.com/Panniantong/Agent-Reach), which provisions and
+    health-checks the Twitter backend (currently twitter-cli). Given a list
+    of profile URLs, it fetches each profile's most recent posts and POSTs
+    them to this backend's `/api/news/` endpoint directly - it does not go
+    through this class or the `scrape_twitter` Celery task below.
     """
     
     def __init__(self, source_name: str = "twitter"):
