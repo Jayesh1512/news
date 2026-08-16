@@ -43,6 +43,7 @@ TWITTER_PROFILE_URLS: https://x.com/user1,https://x.com/user2   # Profile URLs (
 POSTS_PER_PROFILE: 10                         # Posts to fetch per profile per run
 SCRAPE_INTERVAL: 900                          # Seconds between scrapes (15 min)
 REQUEST_DELAY: 5                              # Seconds between profiles (rate limiting)
+AUTH_FAILURE_CYCLES_UNHEALTHY: 2              # Consecutive fully-failed cycles before unhealthy
 TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN}     # Required - see Authentication below
 TWITTER_CT0: ${TWITTER_CT0}                   # Required - see Authentication below
 ```
@@ -78,8 +79,38 @@ logged-in `x.com` session:
    ```
 5. Restart: `docker compose -f docker-compose.twitter-scraper.yml up -d --build`
 
-Cookies expire periodically (typically weeks) - re-export when the scraper
-starts logging auth errors.
+Cookies expire periodically (typically weeks) - X's anti-automation
+detection can also invalidate them earlier than a normal browser session
+would. You don't need to watch for this manually: see **Auth-expiry
+detection** below.
+
+## Auth-expiry detection
+
+The scraper tracks authentication failures across scrape cycles and alerts
+automatically when cookies look expired or invalid, instead of silently
+returning 0 posts forever:
+
+- Every scrape cycle, each profile fetch is classified by twitter-cli's
+  structured error code. `not_authenticated` (missing/expired/invalid
+  cookies) is tracked separately from per-profile issues (rate limits,
+  deleted accounts, etc).
+- If **every** profile fails with an auth error in one cycle, it's logged
+  as a warning with a consecutive-failure count.
+- After **2 consecutive fully-auth-failed cycles** (configurable via
+  `AUTH_FAILURE_CYCLES_UNHEALTHY`), a loud `ERROR`-level block is logged
+  telling you exactly what to do, and the container's Docker health status
+  flips to `unhealthy` - visible in `docker ps` and consumable by any
+  monitoring that watches container health.
+- One successful cycle (even a single profile succeeding, since that means
+  the cookies work) resets the counter back to healthy.
+
+Check status directly:
+
+```bash
+docker ps --filter name=news-twitter-scraper   # STATUS column shows (healthy)/(unhealthy)
+docker exec news-twitter-scraper python -u scraper.py --healthcheck
+docker exec news-twitter-scraper cat /tmp/scraper_health.json
+```
 
 ## How It Works
 1. At build time, `agent-reach install --channels=twitter` provisions the
@@ -117,6 +148,9 @@ docker compose -f docker-compose.twitter-scraper.yml run --rm twitter-scraper ag
 **"No Twitter cookies found" / auth errors in logs:**
 - `TWITTER_AUTH_TOKEN` / `TWITTER_CT0` are missing or expired - re-export
   from Cookie-Editor and restart
+- Check `docker ps` for `(unhealthy)` status, or run
+  `docker exec news-twitter-scraper python -u scraper.py --healthcheck` -
+  see **Auth-expiry detection** above for what triggers this
 
 **No posts saved:**
 - Check logs: `docker logs news-twitter-scraper`

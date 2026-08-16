@@ -39,8 +39,7 @@ COPY scraper.py .
 
 ENV PYTHONUNBUFFERED=1
 
-# Health check: both Agent-Reach and its twitter-cli backend must be usable.
-HEALTHCHECK --interval=30s --timeout=15s --start-period=15s --retries=3 \
-    CMD agent-reach --version && twitter --version || exit 1
+HEALTHCHECK --interval=5m --timeout=15s --start-period=1m --retries=2 \
+    CMD twitter --version >/dev/null 2>&1 && python -u scraper.py --healthcheck
 
 CMD ["python", "-u", "scraper.py"]
