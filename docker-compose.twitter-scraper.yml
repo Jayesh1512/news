@@ -1,10 +1,13 @@
-# Twitter/X scraper (Playwright-based). Posts scraped tweets to the backend.
+# Twitter/X scraper (twitter-cli based). Given a list of profile URLs, fetches
+# each profile's most recent posts and POSTs them to the backend.
+#
+# Requires X login cookies: set TWITTER_AUTH_TOKEN and TWITTER_CT0 below (or
+# in a .env file at the repo root - see twitter-scraper/README.md for how to
+# export them with Cookie-Editor). Use a throwaway/secondary X account, not
+# your main one - automated cookie-based access can get flagged.
 #
 # Start on its own (also brings up the backend it posts to):
 #   docker compose -f docker-compose.twitter-scraper.yml up -d --build
-#
-# NOTE: see twitter-scraper/STATUS.md - this container is not currently
-# verified to build/run on all platforms (Playwright + ARM64 issues).
 #
 # Included automatically by the root docker-compose.yml for a full-stack run.
 
@@ -21,15 +24,20 @@ services:
     container_name: news-twitter-scraper
     environment:
       BACKEND_URL: http://backend:8000  # internal network, not localhost
-      TWITTER_ACCOUNTS: elonmusk,OpenAI,verge,techcrunch,wired
+      # Comma-separated list of X/Twitter profile URLs (or bare handles) to
+      # fetch the most recent posts from.
+      TWITTER_PROFILE_URLS: https://x.com/elonmusk,https://x.com/OpenAI,https://x.com/verge,https://x.com/techcrunch,https://x.com/wired
+      POSTS_PER_PROFILE: 10
       SCRAPE_INTERVAL: 900  # 15 minutes
+      REQUEST_DELAY: 5      # seconds between profiles, rate-limit friendly
+      # Required for twitter-cli - export from a logged-in x.com session.
+      TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN:-}
+      TWITTER_CT0: ${TWITTER_CT0:-}
     depends_on:
       - backend
     networks:
       - news-network
     restart: unless-stopped
-    # Chromium needs more than the 64MB default shared memory.
-    shm_size: 2gb
 
 networks:
   news-network:

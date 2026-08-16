@@ -35,9 +35,9 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 - **Caching**: Redis for Celery task queue
 
 ### Twitter Scraper
-- **Status:** ✅ Builds and runs via `docker-compose.twitter-scraper.yml`, using Microsoft's official Playwright image (Chromium + deps preinstalled, no ARM64 apt issues).
-- **Auth:** anonymous scraping is rate-limited; set `TWITTER_AUTH_TOKEN`/`TWITTER_CT0` for reliable access.
-- **See:** [`twitter-scraper/README.md`](./twitter-scraper/README.md) for setup and alternatives (Twitter API v2).
+- **Status:** ✅ Given a list of X/Twitter profile URLs, fetches each profile's most recent posts. Built on [`twitter-cli`](https://github.com/jackwener/twitter-cli) (Agent-Reach's Twitter backend) - no browser/Chromium, talks straight to X's API.
+- **Auth:** required. Set `TWITTER_AUTH_TOKEN`/`TWITTER_CT0` from a logged-in x.com session (throwaway account recommended).
+- **See:** [`twitter-scraper/README.md`](./twitter-scraper/README.md) for setup, profile URL config, and cookie export instructions.
 
 ### Frontend (Next.js 16)
 - **Server Components**: Fast, SEO-friendly pages
@@ -186,7 +186,7 @@ news/
 │   │   └── layout.tsx          # Root layout
 │   ├── Dockerfile
 │   └── package.json
-├── twitter-scraper/             # Playwright-based Twitter/X scraper
+├── twitter-scraper/             # twitter-cli based Twitter/X profile scraper
 │   ├── Dockerfile
 │   └── scraper.py
 ├── docker-compose.postgres.yml         # Postgres, standalone
@@ -220,23 +220,19 @@ news/
 
 **Interactive docs**: http://localhost:8000/docs
 
-## 🐦 Twitter/X Scraping - Not Available
+## 🐦 Twitter/X Scraping
 
-**Status:** The Twitter scraper is not operational and cannot be built on ARM64 systems.
+**Status:** ✅ Operational, given profile URLs to follow. Built on `twitter-cli` (no browser dependency, so no ARM64/Playwright issues).
 
-### What Happened
-- ❌ Docker build fails on Playwright dependencies (ARM64 Debian Trixie incompatibility)
-- ❌ Runtime fails with missing Python packages (`pkg_resources`)
-- ❌ Zero Twitter articles in database (verified via acceptance tests 2026-08-14)
+Give it a comma-separated list of profile URLs via `TWITTER_PROFILE_URLS` in
+`docker-compose.twitter-scraper.yml`; it fetches each profile's most recent
+posts on a timer and saves them to the backend. Requires X login cookies
+(`TWITTER_AUTH_TOKEN` / `TWITTER_CT0`) since anonymous access is no longer
+viable - see [`twitter-scraper/README.md`](./twitter-scraper/README.md) for
+how to export them.
 
-### Recommendation: Use Twitter API v2
-For production Twitter integration, use the official API instead:
-- More reliable than browser scraping
-- Better rate limits and compliance with Twitter ToS
-- No dependency or platform issues
-- **Get started:** https://developer.twitter.com/en/docs/twitter-api
-
-See [`STATUS.md`](./STATUS.md) for complete acceptance test evidence and attempted solutions.
+See [`STATUS.md`](./STATUS.md) for the history of the earlier
+Playwright-based attempt and why it was replaced.
 
 ## 📊 Data Flow
 

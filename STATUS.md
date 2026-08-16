@@ -8,44 +8,30 @@
 - **FastAPI Backend**: Serving at http://localhost:8001
 - **Next.js Frontend**: Serving at http://localhost:3001
 - **Celery Workers**: Processing scheduled tasks
-- **Twitter Scraper**: Builds and runs (fixed 2026-08-16, see below)
+- **Twitter Scraper**: Rebuilt on `twitter-cli` (2026-08-16, see below)
 
-## Twitter Scraper - RESOLVED (2026-08-16)
+## Twitter Scraper - Rebuilt on twitter-cli (2026-08-16)
 
-**Original failure** (2026-08-14, kept for reference):
+**History**: the original scraper used Playwright/Chromium and failed to
+build on ARM64 (`playwright install-deps chromium` on `python:3.11-slim`
+tried to apt-install font packages that don't exist under those names on
+Debian Trixie). A follow-up fix switched to Microsoft's official Playwright
+image and got it building/running, but anonymous browser scraping remained
+rate-limited by X.
 
-```bash
-$ docker compose build twitter-scraper
-Error: Installation process exited with code: 100
-failed to solve: process "playwright install-deps chromium" did not complete successfully: exit code: 1
-Result: ❌ BUILD FAILED
-```
+**Current approach**: the scraper no longer uses a browser at all. It shells
+out to [`twitter-cli`](https://github.com/jackwener/twitter-cli) - the same
+backend [Agent-Reach](https://github.com/Panniantong/Agent-Reach) uses for
+Twitter/X - which talks directly to X's internal GraphQL API via cookie auth
+(`TWITTER_AUTH_TOKEN` / `TWITTER_CT0`). This removes the Chromium/ARM64 build
+problem entirely and is a plain `python:3.12-slim` image.
 
-**Root cause**: `playwright install-deps chromium` on `python:3.11-slim`
-(Debian Trixie) tries to apt-install `ttf-unifont` / `ttf-ubuntu-font-family`,
-which don't exist under those names on Trixie.
-
-**Fix**: switched the base image to `mcr.microsoft.com/playwright/python`,
-Microsoft's official image with Chromium and all OS-level dependencies
-already installed and version-matched to the `playwright` pip package. No
-apt install step needed at all.
-
-**Verification** (2026-08-16):
-```bash
-$ docker compose -f docker-compose.twitter-scraper.yml build twitter-scraper
- Image news-twitter-scraper Built
-Result: ✅ BUILD SUCCEEDED
-
-$ docker compose -f docker-compose.twitter-scraper.yml up -d
- Container news-twitter-scraper Started
-$ docker ps --filter name=news-twitter-scraper
-news-twitter-scraper   Up (healthy)
-Result: ✅ RUNTIME OK
-```
-
-Anonymous scraping is still rate-limited by Twitter/X; for reliable
-production use, set `TWITTER_AUTH_TOKEN`/`TWITTER_CT0` (see
-`twitter-scraper/.env.example`) or switch to Twitter API v2.
+Given a list of profile URLs in `TWITTER_PROFILE_URLS`, it runs
+`twitter user-posts <handle> --json` per profile and posts the most recent
+tweets to the backend. **Auth is required** - X does not allow meaningful
+anonymous access. See `twitter-scraper/README.md` for how to export
+`TWITTER_AUTH_TOKEN`/`TWITTER_CT0` from a logged-in session (use a throwaway
+account, not your main one).
 
 ## Architecture
 

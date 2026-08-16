@@ -1,7 +1,2 @@
-playwright==1.48.0
 httpx==0.28.1
-beautifulsoup4==4.12.3
-lxml==5.3.0
-python-dotenv==1.0.1
-psycopg2-binary==2.9.9
-sqlalchemy==2.0.36
+twitter-cli==0.8.5
