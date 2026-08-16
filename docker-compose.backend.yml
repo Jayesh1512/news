@@ -1,0 +1,85 @@
+# Backend stack: FastAPI API + Celery worker + Celery beat.
+# Pulls in Postgres and Redis automatically via `include`.
+#
+# Start on its own:
+#   docker compose -f docker-compose.backend.yml up -d --build
+#
+# This brings up postgres, redis, backend, celery-worker and celery-beat -
+# everything the backend needs, nothing from the frontend or scraper.
+#
+# Included automatically by the root docker-compose.yml for a full-stack run.
+
+name: news
+
+include:
+  - docker-compose.postgres.yml
+  - docker-compose.redis.yml
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: news-backend
+    ports:
+      - "8001:8000"  # host 8001 to avoid clashing with a local service on 8000
+    environment:
+      DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      API_TITLE: News Aggregator API
+      API_VERSION: 0.1.0
+      SCRAPE_INTERVAL_MINUTES: 15
+      MAX_ARTICLES_PER_SOURCE: 50
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - news-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: news-celery-worker
+    environment:
+      DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - news-network
+    command: celery -A app.tasks.scrape worker --loglevel=info
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: news-celery-beat
+    environment:
+      DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - news-network
+    command: celery -A app.tasks.scrape beat --loglevel=info
+
+networks:
+  news-network:
+    name: news-network

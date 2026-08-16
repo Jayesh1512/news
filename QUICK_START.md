@@ -1,18 +1,41 @@
 # 🚀 Quick Start Guide
 
-## Current Status
-✅ **Core working** - RSS scraper + backend + frontend verified  
-❌ **Twitter scraper** - Build failed, not operational (use official API instead)
+## Docker Compose Files
 
-## Run the Working Stack
+Each container lives in its own compose file so you can start exactly the
+piece you need. Files that depend on another service `include:` it
+automatically, so you always get a working stack even when you only name
+one file.
+
+| File                                   | Starts                                                    |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `docker-compose.postgres.yml`           | postgres                                                    |
+| `docker-compose.redis.yml`              | redis                                                       |
+| `docker-compose.backend.yml`            | + backend, celery-worker, celery-beat                       |
+| `docker-compose.frontend.yml`           | + full backend stack, frontend                              |
+| `docker-compose.twitter-scraper.yml`    | + full backend stack, twitter-scraper                       |
+| `docker-compose.yml` (root)             | everything                                                  |
 
 ```bash
-# Start everything (PostgreSQL, Redis, Backend, Celery, Frontend)
-docker-compose up
+# Everything
+docker compose up -d --build
 
-# Or run in background
-docker-compose up -d
+# Just the database
+docker compose -f docker-compose.postgres.yml up -d
+
+# Just the backend stack (brings up postgres + redis first)
+docker compose -f docker-compose.backend.yml up -d --build
+
+# Just the frontend (brings up the whole backend stack first)
+docker compose -f docker-compose.frontend.yml up -d --build
+
+# Stop only one service without touching the rest of the stack
+docker compose -f docker-compose.frontend.yml stop frontend
 ```
+
+All files share the same `news-network` and Compose project name (`news`),
+so services started from different files can always reach each other by
+service name, and `docker compose down` from the root removes everything.
 
 Access:
 - **Frontend:** http://localhost:3001 (changed from 3000 due to port conflicts)
@@ -38,39 +61,33 @@ See `PORTS.md` for details.
 
 ## About Twitter Scraping
 
-The Twitter scraper **does not work** - Docker build fails on ARM64 system dependencies.
-
-**Recommendation:** Use the official Twitter API instead.
-
-See `twitter-scraper/STATUS.md` for:
-- What went wrong
-- Why it failed
-- How to use Twitter API v2 (free tier available)
-- Alternative approaches
+The scraper container builds on Microsoft's official Playwright image and
+starts alongside the rest of the stack. It needs Twitter auth for anything
+beyond public timelines - see `twitter-scraper/README.md` for setup.
 
 ## Stop Everything
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ## Troubleshooting
 
 **Frontend shows 500 error:**
 ```bash
-docker-compose restart frontend
+docker compose -f docker-compose.frontend.yml restart frontend
 ```
 
 **No articles:**
 ```bash
 # Trigger scraper manually
-docker-compose exec backend python -c "from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()"
+docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()"
 ```
 
 **Celery not running:**
 ```bash
-docker-compose logs celery-worker
-docker-compose restart celery-worker celery-beat
+docker compose -f docker-compose.backend.yml logs celery-worker
+docker compose -f docker-compose.backend.yml restart celery-worker celery-beat
 ```
 
 ---

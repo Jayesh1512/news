@@ -30,7 +30,7 @@ When you're ready to enable Twitter scraping:
 2. **Option B: Use cookies file (recommended for safety)**
    - Export cookies from logged-in browser
    - Save as `twitter-scraper/cookies.json`
-   - Uncomment volume mount in `docker-compose.yml`
+   - Uncomment volume mount in `docker-compose.twitter-scraper.yml`
 
 3. **Option C: Run without auth (limited)**
    - Container will attempt to scrape public tweets
@@ -40,19 +40,19 @@ When you're ready to enable Twitter scraping:
 
 ```bash
 # 1. Build the container
-docker-compose build twitter-scraper
+docker compose -f docker-compose.twitter-scraper.yml build twitter-scraper
 
 # 2. Run it
-docker-compose up twitter-scraper
+docker compose -f docker-compose.twitter-scraper.yml up -d
 
 # 3. Watch logs
 docker logs -f news-twitter-scraper
 
 # 4. Verify tweets in backend
-curl http://localhost:8000/api/news/?source=twitter
+curl http://localhost:8001/api/news/?source=twitter
 
 # 5. Check frontend
-# Visit http://localhost:3000 and filter by Twitter
+# Visit http://localhost:3001 and filter by Twitter
 ```
 
 ### 🐛 Troubleshooting
@@ -67,7 +67,7 @@ curl http://localhost:8000/api/news/?source=twitter
 
 **No tweets saved:**
 - Check logs: `docker logs news-twitter-scraper`
-- Verify backend is running: `curl http://localhost:8000/health`
+- Verify backend is running: `curl http://localhost:8001/health`
 - Check account names are correct (no @ symbol)
 
 **High memory usage:**

@@ -11,12 +11,19 @@ Playwright-based scraper for collecting tweets from specified accounts.
 
 ## Configuration
 
-Environment variables in `docker-compose.yml`:
+Environment variables set in `../docker-compose.twitter-scraper.yml`:
 
 ```yaml
 BACKEND_URL: http://backend:8000          # Backend API URL
 TWITTER_ACCOUNTS: user1,user2,user3       # Comma-separated usernames
 SCRAPE_INTERVAL: 900                      # Seconds between scrapes (15 min)
+```
+
+## Run standalone
+
+```bash
+# From the repo root - also brings up the backend stack this scraper posts to
+docker compose -f docker-compose.twitter-scraper.yml up -d --build
 ```
 
 ## Default Accounts

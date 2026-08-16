@@ -1,0 +1,36 @@
+# Standalone PostgreSQL database.
+#
+# Start on its own:
+#   docker compose -f docker-compose.postgres.yml up -d
+#
+# Included automatically by docker-compose.backend.yml (and anything that
+# depends on it), and by the root docker-compose.yml for a full-stack run.
+
+name: news
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: news-postgres
+    environment:
+      POSTGRES_DB: newsdb
+      POSTGRES_USER: newsuser
+      POSTGRES_PASSWORD: newspass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - news-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newsuser -d newsdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  news-network:
+    name: news-network
+
+volumes:
+  postgres_data:

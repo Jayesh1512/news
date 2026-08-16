@@ -10,8 +10,8 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-if ! command -v docker-compose &> /dev/null; then
-    echo "❌ Docker Compose is not installed. Please install Docker Compose first."
+if ! docker compose version &> /dev/null; then
+    echo "❌ Docker Compose (v2) is not installed. Please install Docker Compose first."
     exit 1
 fi
 
@@ -33,7 +33,10 @@ echo ""
 echo "🚀 Starting all services with Docker Compose..."
 echo ""
 
-docker-compose up --build -d
+# Each service also has its own docker-compose.<service>.yml if you only
+# want to start part of the stack, e.g.:
+#   docker compose -f docker-compose.backend.yml up -d --build
+docker compose up --build -d
 
 echo ""
 echo "⏳ Waiting for services to be ready..."
@@ -43,16 +46,16 @@ echo ""
 echo "✅ Services started successfully!"
 echo ""
 echo "📱 Access the application:"
-echo "   - Frontend: http://localhost:3000"
-echo "   - Backend API: http://localhost:8000"
-echo "   - API Docs: http://localhost:8000/docs"
+echo "   - Frontend: http://localhost:3001"
+echo "   - Backend API: http://localhost:8001"
+echo "   - API Docs: http://localhost:8001/docs"
 echo ""
 echo "🔍 View logs:"
-echo "   docker-compose logs -f"
+echo "   docker compose logs -f"
 echo ""
 echo "⚙️  Trigger manual scrape:"
-echo "   docker-compose exec backend python -c \"from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()\""
+echo "   docker compose -f docker-compose.backend.yml exec backend python -c \"from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()\""
 echo ""
 echo "🛑 Stop services:"
-echo "   docker-compose down"
+echo "   docker compose down"
 echo ""

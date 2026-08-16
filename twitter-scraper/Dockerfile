@@ -1,34 +1,25 @@
-# Twitter Scraper - Lightweight Container
-# Uses Python base + Playwright installed at runtime
-FROM python:3.11-slim
+# Twitter Scraper - Playwright + Chromium
+#
+# Uses Microsoft's official Playwright image, which already ships Chromium
+# and all of its OS-level dependencies pre-installed and version-matched.
+# This avoids the apt package-name churn (e.g. ttf-unifont vs fonts-unifont)
+# that breaks `playwright install-deps` on plain Debian/Ubuntu base images.
+FROM mcr.microsoft.com/playwright/python:v1.48.0-noble
 
 WORKDIR /app
-
-# Install system dependencies for Playwright
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
 COPY requirements.txt .
 
-# Install Python packages
+# Install Python packages (Chromium + deps already present in the base image)
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
-
-# Install Playwright (browsers installed on first run to save build time)
-RUN playwright install-deps chromium
 
 # Copy scraper code
 COPY scraper.py .
 
 # Environment defaults
 ENV PYTHONUNBUFFERED=1
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-
-# Download browser on first run
-RUN playwright install chromium --with-deps || echo "Browser will download on first run"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -1,0 +1,27 @@
+# Standalone Redis (Celery broker/result backend).
+#
+# Start on its own:
+#   docker compose -f docker-compose.redis.yml up -d
+#
+# Included automatically by docker-compose.backend.yml (and anything that
+# depends on it), and by the root docker-compose.yml for a full-stack run.
+
+name: news
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: news-redis
+    ports:
+      - "6380:6379"  # host 6380 to avoid clashing with a local Redis on 6379
+    networks:
+      - news-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  news-network:
+    name: news-network

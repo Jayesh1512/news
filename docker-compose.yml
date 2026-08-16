@@ -1,134 +1,20 @@
-services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:16-alpine
-    container_name: news-postgres
-    environment:
-      POSTGRES_DB: newsdb
-      POSTGRES_USER: newsuser
-      POSTGRES_PASSWORD: newspass
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U newsuser -d newsdb"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+# Full stack: postgres, redis, backend, celery worker, celery beat,
+# twitter-scraper, frontend. Just wires together the per-service files.
+#
+# Start everything:
+#   docker compose up -d --build
+#
+# Start only what you need, independently, from any of the split files:
+#   docker compose -f docker-compose.postgres.yml       up -d
+#   docker compose -f docker-compose.redis.yml          up -d
+#   docker compose -f docker-compose.backend.yml        up -d --build   # + postgres, redis
+#   docker compose -f docker-compose.twitter-scraper.yml up -d --build # + backend stack
+#   docker compose -f docker-compose.frontend.yml       up -d --build  # + backend stack
+#
+# See PORTS.md for exposed ports and QUICK_START.md for day-to-day usage.
 
-  # Redis for Celery
-  redis:
-    image: redis:7-alpine
-    container_name: news-redis
-    ports:
-      - "6380:6379"  # Changed to 6380 to avoid conflict with existing Redis
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+name: news
 
-  # FastAPI Backend
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: news-backend
-    ports:
-      - "8001:8000"  # Changed to 8001 to avoid conflict
-    environment:
-      DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
-      REDIS_URL: redis://redis:6379/0
-      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
-      API_TITLE: News Aggregator API
-      API_VERSION: 0.1.0
-      SCRAPE_INTERVAL_MINUTES: 15
-      MAX_ARTICLES_PER_SOURCE: 50
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./backend:/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  # Celery Worker
-  celery-worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: news-celery-worker
-    environment:
-      DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      - postgres
-      - redis
-      - backend
-    volumes:
-      - ./backend:/app
-    command: celery -A app.tasks.scrape worker --loglevel=info
-
-  # Celery Beat Scheduler
-  celery-beat:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: news-celery-beat
-    environment:
-      DATABASE_URL: postgresql://newsuser:newspass@postgres:5432/newsdb
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      - postgres
-      - redis
-      - backend
-    volumes:
-      - ./backend:/app
-    command: celery -A app.tasks.scrape beat --loglevel=info
-
-  # Twitter Scraper (Agent-Reach / Playwright)
-  twitter-scraper:
-    build:
-      context: ./twitter-scraper
-      dockerfile: Dockerfile
-    container_name: news-twitter-scraper
-    environment:
-      BACKEND_URL: http://backend:8000  # Internal network, not localhost
-      TWITTER_ACCOUNTS: elonmusk,OpenAI,verge,techcrunch,wired
-      SCRAPE_INTERVAL: 900  # 15 minutes
-    depends_on:
-      - backend
-    restart: unless-stopped
-    # Allocate more shared memory for Chromium
-    shm_size: 2gb
-
-  # Next.js Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:8001
-    container_name: news-frontend
-    ports:
-      - "3001:3000"  # Changed to 3001 to avoid conflict
-    environment:
-      # Server-side: use Docker internal network
-      API_URL_SERVER: http://backend:8000
-      # Client-side (browser): use localhost:8001
-      NEXT_PUBLIC_API_URL: http://localhost:8001
-    depends_on:
-      - backend
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    # For development, use this instead:
-    # volumes:
-    #   - ./frontend:/app
-    #   - /app/node_modules
-    #   - /app/.next
-    # command: npm run dev
-
-volumes:
-  postgres_data:
+include:
+  - docker-compose.frontend.yml
+  - docker-compose.twitter-scraper.yml

@@ -1,0 +1,40 @@
+# Next.js frontend. Talks to the backend over HTTP.
+#
+# Start on its own (also brings up the backend it talks to):
+#   docker compose -f docker-compose.frontend.yml up -d --build
+#
+# If you only want the frontend container itself and already have a backend
+# running elsewhere, comment out the `include:` block below.
+#
+# Included automatically by the root docker-compose.yml for a full-stack run.
+
+name: news
+
+include:
+  - docker-compose.backend.yml
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8001
+    container_name: news-frontend
+    ports:
+      - "3001:3000"  # host 3001 to avoid clashing with a local service on 3000
+    environment:
+      # Server-side rendering: use the Docker internal network.
+      API_URL_SERVER: http://backend:8000
+      # Client-side (browser): use the published host port.
+      NEXT_PUBLIC_API_URL: http://localhost:8001
+    depends_on:
+      - backend
+    networks:
+      - news-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+networks:
+  news-network:
+    name: news-network

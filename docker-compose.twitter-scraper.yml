@@ -1,0 +1,36 @@
+# Twitter/X scraper (Playwright-based). Posts scraped tweets to the backend.
+#
+# Start on its own (also brings up the backend it posts to):
+#   docker compose -f docker-compose.twitter-scraper.yml up -d --build
+#
+# NOTE: see twitter-scraper/STATUS.md - this container is not currently
+# verified to build/run on all platforms (Playwright + ARM64 issues).
+#
+# Included automatically by the root docker-compose.yml for a full-stack run.
+
+name: news
+
+include:
+  - docker-compose.backend.yml
+
+services:
+  twitter-scraper:
+    build:
+      context: ./twitter-scraper
+      dockerfile: Dockerfile
+    container_name: news-twitter-scraper
+    environment:
+      BACKEND_URL: http://backend:8000  # internal network, not localhost
+      TWITTER_ACCOUNTS: elonmusk,OpenAI,verge,techcrunch,wired
+      SCRAPE_INTERVAL: 900  # 15 minutes
+    depends_on:
+      - backend
+    networks:
+      - news-network
+    restart: unless-stopped
+    # Chromium needs more than the 64MB default shared memory.
+    shm_size: 2gb
+
+networks:
+  news-network:
+    name: news-network

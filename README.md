@@ -35,11 +35,9 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 - **Caching**: Redis for Celery task queue
 
 ### Twitter Scraper
-- **Status:** ❌ **NOT OPERATIONAL** (Docker build fails on ARM64)
-- **Tested:** 2026-08-14 - Build fails, runtime fails, zero Twitter articles in database
-- **Root cause:** Playwright dependencies incompatible with ARM64 Debian Trixie
-- **Recommendation:** Use official Twitter API v2 instead of web scraping
-- **See:** [`STATUS.md`](./STATUS.md) for acceptance test evidence and alternatives
+- **Status:** ✅ Builds and runs via `docker-compose.twitter-scraper.yml`, using Microsoft's official Playwright image (Chromium + deps preinstalled, no ARM64 apt issues).
+- **Auth:** anonymous scraping is rate-limited; set `TWITTER_AUTH_TOKEN`/`TWITTER_CT0` for reliable access.
+- **See:** [`twitter-scraper/README.md`](./twitter-scraper/README.md) for setup and alternatives (Twitter API v2).
 
 ### Frontend (Next.js 16)
 - **Server Components**: Fast, SEO-friendly pages
@@ -58,14 +56,25 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 
 ### Option 1: Docker Compose (Recommended)
 
+Each container has its own compose file so you can start just the piece you
+need - dependencies come along automatically via `include:`. See
+`QUICK_START.md` for the full table.
+
 1. **Clone and navigate**:
    ```bash
    cd news
    ```
 
-2. **Start all services**:
+2. **Start everything**:
    ```bash
-   docker-compose up --build
+   docker compose up --build
+   ```
+
+   Or start just one part of the stack, and its dependencies come with it:
+   ```bash
+   docker compose -f docker-compose.backend.yml up -d --build   # postgres + redis + backend + celery
+   docker compose -f docker-compose.frontend.yml up -d --build  # + frontend
+   docker compose -f docker-compose.postgres.yml up -d          # just postgres
    ```
 
 3. **Access the application**:
@@ -76,7 +85,7 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 4. **Initial data**:
    The RSS scraper will automatically start fetching articles every 15 minutes. You can trigger it manually:
    ```bash
-   docker-compose exec backend python -c "from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()"
+   docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()"
    ```
 
 ### Option 2: Local Development
@@ -171,20 +180,22 @@ news/
 ├── frontend/                   # Next.js service
 │   ├── app/
 │   │   ├── page.tsx           # Homepage
-│   │   ├── search/page.tsx    # Search page
-│   │   ├── stats/page.tsx     # Statistics page
-│   │   └── layout.tsx         # Root layout
-│   ├── components/
-│   │   ├── article-card.tsx   # Article card component
-│   │   ├── news-grid.tsx      # Grid layout
-│   │   └── search-bar.tsx     # Search component
-│   ├── lib/
-│   │   ├── api-client.ts      # Backend API client
-│   │   └── types.ts           # TypeScript types
+│   │   ├── article/[id]/      # Article detail page
+│   │   ├── components/        # UI components
+│   │   ├── lib/                # API client, utils
+│   │   └── layout.tsx          # Root layout
 │   ├── Dockerfile
 │   └── package.json
-├── docker-compose.yml          # Full stack orchestration
-└── README.md                   # This file
+├── twitter-scraper/             # Playwright-based Twitter/X scraper
+│   ├── Dockerfile
+│   └── scraper.py
+├── docker-compose.postgres.yml         # Postgres, standalone
+├── docker-compose.redis.yml            # Redis, standalone
+├── docker-compose.backend.yml          # Backend + Celery (includes postgres, redis)
+├── docker-compose.frontend.yml         # Frontend (includes backend stack)
+├── docker-compose.twitter-scraper.yml  # Scraper (includes backend stack)
+├── docker-compose.yml                  # Full stack (includes everything above)
+└── README.md                           # This file
 ```
 
 ## 🔌 API Endpoints
