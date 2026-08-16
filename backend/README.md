@@ -4,9 +4,9 @@ FastAPI backend for the news aggregator application.
 
 ## Features
 
-- **Multi-source scraping**: RSS feeds (Postgres), Twitter/X (Supabase)
-- **Background tasks**: Celery for scheduled scraping
-- **Database**: PostgreSQL with SQLAlchemy ORM (RSS articles) + Supabase (Twitter posts)
+- **Multi-source scraping**: RSS feeds and Twitter/X, both stored in Supabase
+- **Background tasks**: Celery for scheduled scraping (RSS every 15 min, Twitter every 6h)
+- **Database**: [Supabase](https://supabase.com) - Postgres via SQLAlchemy for RSS articles, Supabase REST API (supabase-py) for Twitter posts. No local Postgres.
 - **API**: RESTful API with automatic documentation
 
 ## Twitter/X scraping (Supabase)
@@ -45,7 +45,7 @@ If Supabase or Twitter credentials aren't configured, the task returns
 ### Prerequisites
 
 - Python 3.12+
-- PostgreSQL
+- A [Supabase](https://supabase.com) project (free tier is fine) - the only database
 - Redis
 - UV package manager
 
@@ -64,13 +64,16 @@ uv pip install -r pyproject.toml
 cp .env.example .env
 ```
 
-3. Update `.env` with your database and Redis URLs
+3. Update `.env`:
+   - `DATABASE_URL`: Supabase Postgres connection string (Settings > Database > Connection string)
+   - `SUPABASE_URL` / `SUPABASE_KEY`: Settings > API (service_role key)
+   - `REDIS_URL`
 
-4. Run database migrations:
-
-```bash
-uv run alembic upgrade head
-```
+4. Create the RSS tables (Article/Source) - SQLAlchemy creates these
+   automatically on backend startup (`Base.metadata.create_all` in
+   `app/main.py`), no separate migration step needed. For the Twitter
+   posts table, run [`supabase_schema.sql`](supabase_schema.sql) once in
+   your Supabase project's SQL editor.
 
 5. Start the API server:
 
@@ -102,10 +105,10 @@ celery -A app.tasks.scrape beat --loglevel=info
 
 ## API Documentation
 
-Once running, visit:
+Once running, visit (default Docker port 8501, see [`../PORTS.md`](../PORTS.md)):
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- Swagger UI: http://localhost:8501/docs (or :8000/docs if running `uvicorn` directly, no Docker port mapping)
+- ReDoc: http://localhost:8501/redoc
 
 ## Docker
 
@@ -123,7 +126,7 @@ backend/
 ├── app/
 │   ├── api/              # API routes
 │   ├── core/             # Configuration + constants (TWITTER_ACCOUNTS)
-│   ├── db/               # Database setup (Postgres session + Supabase client)
+│   ├── db/               # Database setup (SQLAlchemy session + Supabase client)
 │   ├── models/           # SQLAlchemy models
 │   ├── schemas/          # Pydantic schemas
 │   ├── scrapers/         # Scraper implementations

@@ -19,15 +19,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8001
+        NEXT_PUBLIC_API_URL: http://localhost:8501
     container_name: news-frontend
     ports:
-      - "3001:3000"  # host 3001 to avoid clashing with a local service on 3000
+      - "8502:3000"
     environment:
       # Server-side rendering: use the Docker internal network.
       API_URL_SERVER: http://backend:8000
       # Client-side (browser): use the published host port.
-      NEXT_PUBLIC_API_URL: http://localhost:8001
+      NEXT_PUBLIC_API_URL: http://localhost:8501
     depends_on:
       - backend
     networks:

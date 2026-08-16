@@ -13,7 +13,7 @@ services:
     image: redis:7-alpine
     container_name: news-redis
     ports:
-      - "6380:6379"  # host 6380 to avoid clashing with a local Redis on 6379
+      - "8500:6379"
     networks:
       - news-network
     healthcheck:

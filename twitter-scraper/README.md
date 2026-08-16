@@ -156,7 +156,7 @@ docker compose -f docker-compose.twitter-scraper.yml run --rm twitter-scraper ag
 - Check logs: `docker logs news-twitter-scraper`
 - Run `agent-reach doctor` inside the container (see above) to see what
   Agent-Reach thinks is wrong
-- Verify backend is running: `curl http://localhost:8001/health`
+- Verify backend is running: `curl http://localhost:8501/health`
 - Verify a profile URL resolves to a real handle (typos are skipped with a warning)
 
 **Container crashes / `twitter` or `agent-reach` command not found:**

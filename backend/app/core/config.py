@@ -15,22 +15,26 @@ class Settings(BaseSettings):
     debug: bool = False
     
     # CORS
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:8502"
     
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]
     
-    # Database
-    database_url: str = "postgresql://newsuser:newspass@localhost:5432/newsdb"
+    # Database - Supabase Postgres connection string, no local Postgres.
+    # Empty by default; must be set in .env (see backend/.env.example) or
+    # RSS article storage (app/db/session.py) won't be able to connect.
+    database_url: str = ""
 
-    # Supabase (used to store scraped Twitter/X posts)
+    # Supabase client (used to store scraped Twitter/X posts via
+    # supabase-py / REST API, separate from database_url above which is a
+    # direct Postgres connection used by SQLAlchemy)
     supabase_url: str = ""
     supabase_key: str = ""  # service_role key (needed for server-side writes)
     supabase_twitter_table: str = "twitter_posts"
 
     # Redis
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://localhost:8500/0"
 
     # Twitter
     twitter_auth_token: str = ""

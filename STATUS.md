@@ -3,10 +3,10 @@
 ## Working Components ✅
 
 - **RSS Scraper**: Fully operational, actively scraping articles
-- **PostgreSQL Database**: Running and storing articles
-- **Redis**: Running on port 6380
-- **FastAPI Backend**: Serving at http://localhost:8001
-- **Next.js Frontend**: Serving at http://localhost:3001
+- **Database**: Supabase (Postgres) - RSS articles via SQLAlchemy, Twitter posts via the Supabase REST API. No local Postgres container (removed 2026-08-16).
+- **Redis**: Running on port 8500
+- **FastAPI Backend**: Serving at http://localhost:8501
+- **Next.js Frontend**: Serving at http://localhost:8502
 - **Celery Workers**: Processing scheduled tasks
 - **Twitter Scraper**: Rebuilt on Agent-Reach (2026-08-16, see below)
 
@@ -43,12 +43,20 @@ account, not your main one).
 
 The system is split into independently-deployable services, each with its
 own `docker-compose.*.yml`:
-- `docker-compose.postgres.yml` / `docker-compose.redis.yml` - data stores
+- `docker-compose.redis.yml` - Redis (Celery broker/backend)
 - `docker-compose.backend.yml` - FastAPI + Celery worker + Celery beat
 - `docker-compose.frontend.yml` - Next.js
-- `docker-compose.twitter-scraper.yml` - Playwright scraper
+- `docker-compose.twitter-scraper.yml` - Agent-Reach / twitter-cli scraper
 - `docker-compose.yml` - includes all of the above for a full-stack run
 
+Database is [Supabase](https://supabase.com) (Postgres) - not one of the
+compose files, since it's an external managed service. Set `DATABASE_URL`,
+`SUPABASE_URL`, and `SUPABASE_KEY` in a repo-root `.env` before starting
+the backend stack.
+
 Files that depend on another service `include:` it, so starting any one
-file brings up everything it needs and nothing it doesn't.
+file brings up everything it needs and nothing it doesn't. See
+[`PORTS.md`](./PORTS.md) for the (consecutive, starting at 8500) port
+scheme and [`CONTAINERS.md`](./CONTAINERS.md) for exact per-container
+commands.
 

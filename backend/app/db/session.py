@@ -1,3 +1,11 @@
+"""SQLAlchemy session for RSS articles/sources, stored in Supabase's
+Postgres database (DATABASE_URL should be a Supabase connection string -
+see backend/.env.example). There is no local Postgres container; Supabase
+is the only Postgres this backend talks to.
+
+Twitter posts use a separate path: app.db.supabase_client (the Supabase
+Python client / REST API), not this SQLAlchemy session.
+"""
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker

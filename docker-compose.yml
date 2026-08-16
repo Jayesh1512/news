@@ -1,17 +1,21 @@
-# Full stack: postgres, redis, backend, celery worker, celery beat,
-# twitter-scraper, frontend. Just wires together the per-service files.
+# Full stack: redis, backend, celery worker, celery beat, twitter-scraper,
+# frontend. Database is Supabase (Postgres) - no local postgres container.
+# Just wires together the per-service files.
+#
+# Requires DATABASE_URL (Supabase Postgres connection string) and
+# SUPABASE_URL/SUPABASE_KEY set in a repo-root .env - see backend/.env.example.
 #
 # Start everything:
 #   docker compose up -d --build
 #
 # Start only what you need, independently, from any of the split files:
-#   docker compose -f docker-compose.postgres.yml       up -d
-#   docker compose -f docker-compose.redis.yml          up -d
-#   docker compose -f docker-compose.backend.yml        up -d --build   # + postgres, redis
-#   docker compose -f docker-compose.twitter-scraper.yml up -d --build # + backend stack
-#   docker compose -f docker-compose.frontend.yml       up -d --build  # + backend stack
+#   docker compose -f docker-compose.redis.yml           up -d
+#   docker compose -f docker-compose.backend.yml         up -d --build   # + redis
+#   docker compose -f docker-compose.twitter-scraper.yml up -d --build   # + backend stack
+#   docker compose -f docker-compose.frontend.yml        up -d --build   # + backend stack
 #
-# See PORTS.md for exposed ports and QUICK_START.md for day-to-day usage.
+# See PORTS.md for exposed ports, CONTAINERS.md for exact per-container
+# commands, and QUICK_START.md for day-to-day usage.
 
 name: news
 
