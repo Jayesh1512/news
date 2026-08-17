@@ -1,11 +1,18 @@
-// Real news data: reads RSS articles and Twitter/X posts from Supabase (see
-// app/lib/data.ts, which also backs the public app/api/news and
-// app/api/twitter Route Handlers) and normalizes them into a single feed.
-// Server Components call the data layer directly rather than fetching this
-// app's own Route Handlers - see Next.js docs, "Server Components" caveat
-// under Route Handlers: an extra HTTP round trip and it fails at build time
-// for prerendered routes since there's no server listening yet.
-import { getArticles, getArticleByIdCached, getTwitterPosts, type ApiArticle, type ApiTwitterPost } from "@/lib/data";
+// Real news data: reads RSS articles from Supabase (see app/lib/data.ts,
+// which also backs the public app/api/news Route Handler) and normalizes
+// them into the feed. Server Components call the data layer directly rather
+// than fetching this app's own Route Handlers - see Next.js docs, "Server
+// Components" caveat under Route Handlers: an extra HTTP round trip and it
+// fails at build time for prerendered routes since there's no server
+// listening yet.
+//
+// Twitter/X posts (app/lib/data.ts's getTwitterPosts, backing app/api/twitter)
+// are intentionally NOT merged into this feed right now. The plan is to pull
+// tweets, transform/rewrite them, and insert the results into the `articles`
+// table upstream (backend job) so they show up here like any other article -
+// see repo notes for that pipeline. Once that exists, getFeed can go back to
+// being articles-only forever, so no tweet-merging code is needed here.
+import { getArticles, getArticleByIdCached, type ApiArticle } from "@/lib/data";
 
 export const categories = [
   "Home",
@@ -15,17 +22,12 @@ export const categories = [
   "Sports",
   "Science",
   "Culture",
-  "Twitter/X",
 ] as const;
 
-/**
- * Unified feed item shown in the UI. RSS articles render with an internal
- * `/article/[id]` link; Twitter posts render with an external link to X
- * (there's no local detail page for a tweet).
- */
+/** Feed item shown in the UI, backed by an `articles` row. */
 export type FeedItem = {
   id: string;
-  kind: "article" | "tweet";
+  kind: "article";
   title: string;
   excerpt: string;
   category: string;
@@ -72,39 +74,13 @@ function articleToFeedItem(article: ApiArticle): FeedItem {
   };
 }
 
-function tweetToFeedItem(tweet: ApiTwitterPost): FeedItem {
-  const timeSource = tweet.published_at ?? tweet.fetched_at;
-  return {
-    id: `tweet-${tweet.tweet_id}`,
-    kind: "tweet",
-    title: tweet.text.length > 140 ? `${tweet.text.slice(0, 137)}...` : tweet.text,
-    excerpt: tweet.text,
-    category: "Twitter/X",
-    author: tweet.author_name ? `${tweet.author_name} (@${tweet.author})` : `@${tweet.author}`,
-    publishedAt: formatRelativeTime(timeSource),
-    sortTime: new Date(timeSource).getTime() || 0,
-    href: tweet.url,
-    external: true,
-  };
-}
-
-/** Fetch the combined RSS + Twitter feed, newest first. */
+/** Fetch the articles feed, newest first. */
 export async function getFeed(limit = 40): Promise<FeedItem[]> {
-  const [articles, tweets] = await Promise.all([
-    getArticles({ limit, hours: 168 }),
-    getTwitterPosts({ limit }),
-  ]);
-
-  const items = [
-    ...articles.map(articleToFeedItem),
-    ...tweets.map(tweetToFeedItem),
-  ];
-
-  return items.sort((a, b) => b.sortTime - a.sortTime);
+  const articles = await getArticles({ limit, hours: 168 });
+  return articles.map(articleToFeedItem).sort((a, b) => b.sortTime - a.sortTime);
 }
 
-/** Fetch a single RSS article by id (used by /article/[id]). Tweets don't
- * have a local detail page - they link out to X directly. */
+/** Fetch a single RSS article by id (used by /article/[id]). */
 export async function getArticleById(id: string): Promise<ApiArticle | null> {
   const numericId = Number(id);
   if (!Number.isInteger(numericId)) return null;
