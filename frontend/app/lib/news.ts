@@ -1,8 +1,11 @@
-// Real news data: fetches RSS articles and Twitter posts from the backend
-// API and normalizes them into a single feed. No more mock data - see
-// git history for the old hardcoded `articles` array this replaced.
-
-const API_URL_SERVER = process.env.API_URL_SERVER ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8501";
+// Real news data: reads RSS articles and Twitter/X posts from Supabase (see
+// app/lib/data.ts, which also backs the public app/api/news and
+// app/api/twitter Route Handlers) and normalizes them into a single feed.
+// Server Components call the data layer directly rather than fetching this
+// app's own Route Handlers - see Next.js docs, "Server Components" caveat
+// under Route Handlers: an extra HTTP round trip and it fails at build time
+// for prerendered routes since there's no server listening yet.
+import { getArticles, getArticleByIdCached, getTwitterPosts, type ApiArticle, type ApiTwitterPost } from "@/lib/data";
 
 export const categories = [
   "Home",
@@ -14,39 +17,6 @@ export const categories = [
   "Culture",
   "Twitter/X",
 ] as const;
-
-/** A backend RSS article, as returned by GET /api/news. */
-type ApiArticle = {
-  id: number;
-  title: string;
-  content: string | null;
-  url: string;
-  source: string;
-  author: string | null;
-  published_at: string | null;
-  fetched_at: string;
-  category: string | null;
-  image_url: string | null;
-};
-
-/** A backend Twitter/X post, as returned by GET /api/twitter. */
-type ApiTwitterPost = {
-  tweet_id: string;
-  account: string;
-  author: string;
-  author_name: string | null;
-  text: string;
-  url: string;
-  is_retweet: boolean;
-  lang: string | null;
-  likes: number;
-  retweets: number;
-  replies: number;
-  views: number;
-  media_url: string | null;
-  published_at: string | null;
-  fetched_at: string;
-};
 
 /**
  * Unified feed item shown in the UI. RSS articles render with an internal
@@ -118,34 +88,16 @@ function tweetToFeedItem(tweet: ApiTwitterPost): FeedItem {
   };
 }
 
-async function fetchJson<T>(path: string): Promise<T | null> {
-  try {
-    const res = await fetch(`${API_URL_SERVER}${path}`, {
-      // Revalidate frequently so newly-scraped RSS/Twitter data shows up
-      // without a full rebuild - see Next.js 16 fetching-data guide.
-      next: { revalidate: 60 },
-    });
-    if (!res.ok) {
-      console.error(`API request failed: ${path} -> ${res.status}`);
-      return null;
-    }
-    return (await res.json()) as T;
-  } catch (err) {
-    console.error(`API request errored: ${path}`, err);
-    return null;
-  }
-}
-
 /** Fetch the combined RSS + Twitter feed, newest first. */
 export async function getFeed(limit = 40): Promise<FeedItem[]> {
   const [articles, tweets] = await Promise.all([
-    fetchJson<ApiArticle[]>(`/api/news/?limit=${limit}&hours=168`),
-    fetchJson<ApiTwitterPost[]>(`/api/twitter/?limit=${limit}`),
+    getArticles({ limit, hours: 168 }),
+    getTwitterPosts({ limit }),
   ]);
 
   const items = [
-    ...(articles ?? []).map(articleToFeedItem),
-    ...(tweets ?? []).map(tweetToFeedItem),
+    ...articles.map(articleToFeedItem),
+    ...tweets.map(tweetToFeedItem),
   ];
 
   return items.sort((a, b) => b.sortTime - a.sortTime);
@@ -156,10 +108,5 @@ export async function getFeed(limit = 40): Promise<FeedItem[]> {
 export async function getArticleById(id: string): Promise<ApiArticle | null> {
   const numericId = Number(id);
   if (!Number.isInteger(numericId)) return null;
-
-  // The backend doesn't have a get-by-id endpoint; fetch a wide-enough
-  // window and filter client-side rather than adding a new endpoint just
-  // for this. Fine at this data volume; revisit if the feed grows large.
-  const articles = await fetchJson<ApiArticle[]>(`/api/news/?limit=100&hours=168`);
-  return articles?.find((a) => a.id === numericId) ?? null;
+  return getArticleByIdCached(numericId);
 }

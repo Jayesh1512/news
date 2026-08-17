@@ -34,8 +34,9 @@ and any `localhost:<port>` references in the same file:
 - `docker-compose.redis.yml`: `8500:6379`
 - `docker-compose.backend.yml`: `8501:8000`, plus `CORS_ORIGINS` (must match
   the frontend's host port)
-- `docker-compose.frontend.yml`: `8502:3000`, plus `NEXT_PUBLIC_API_URL`
-  (must match the backend's host port)
+- `docker-compose.frontend.yml`: `8502:3000`. The frontend reads Supabase
+  directly (`SUPABASE_URL`/`SUPABASE_KEY`), so it has no backend port to
+  keep in sync.
 
 Also update the matching defaults in `backend/.env.example`,
 `backend/app/core/config.py`, and `frontend/.env.example` if you want local

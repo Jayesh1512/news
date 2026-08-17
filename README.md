@@ -4,25 +4,28 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 
 ## 🏗️ Architecture
 
+The Next.js frontend reads directly from Supabase (its own backend, via
+Route Handlers under `frontend/app/api/`) - it does not call the FastAPI
+service for reads. FastAPI + Celery remain the write path: they scrape RSS
+/ Twitter and store results in Supabase.
+
 ```
-┌─────────────────┐         ┌──────────────────┐
-│   Next.js       │  HTTP   │   FastAPI        │
-│   Frontend      │ ──────> │   Backend        │
-│   (Port 8502)   │         │   (Port 8501)    │
-└─────────────────┘         └──────────────────┘
-                                     │
-                            ┌────────┼────────┐
-                            │        │        │
-                       ┌────▼────┐  │  ┌─────▼────────┐
-                       │ Supabase │  │  │   Redis      │
-                       │(Postgres)│  │  │  (Port 8500) │
-                       └──────────┘  │  └──────────────┘
-                                     │
-                                ┌────▼────┐
-                                │ Celery  │
-                                │ Workers │
-                                │ + Beat  │
-                                └─────────┘
+┌─────────────────┐                        ┌──────────────────┐
+│   Next.js       │                        │   FastAPI        │
+│   Frontend      │                        │   Backend        │
+│   (Port 8502)   │                        │   (Port 8501)    │
+└────────┬────────┘                        └─────────┬────────┘
+         │ read (cached)                              │ write
+         └──────────────────┐        ┌─────────────────┘
+                             │        │
+                        ┌────▼────────▼───┐      ┌──────────────┐
+                        │ Supabase         │      │   Redis      │
+                        │ (Postgres)       │      │  (Port 8500) │
+                        └──────────────────┘      └───────┬──────┘
+                                                    ┌───────▼───────┐
+                                                    │ Celery         │
+                                                    │ Workers + Beat │
+                                                    └────────────────┘
 ```
 
 ## ✨ Features
@@ -40,6 +43,11 @@ A modern, full-stack news aggregator with separate FastAPI backend and Next.js f
 - **See:** [`twitter-scraper/README.md`](./twitter-scraper/README.md) for setup, profile URL config, and cookie export instructions.
 
 ### Frontend (Next.js 16)
+- **Own backend**: reads Supabase directly via Route Handlers under
+  `frontend/app/api/` (`app/lib/data.ts`) - no dependency on the FastAPI
+  service for reads
+- **Backend-level caching**: `unstable_cache` (60s) in front of every
+  Supabase query, so request bursts don't hammer the database
 - **Server Components**: Fast, SEO-friendly pages
 - **Modern UI**: Tailwind CSS with dark mode support
 - **Real-time updates**: Auto-refresh with Next.js revalidation
@@ -149,7 +157,8 @@ need - dependencies come along automatically via `include:`. See
 3. **Set up environment**:
    ```bash
    cp .env.example .env.local
-   # Edit .env.local with backend URL (http://localhost:8501)
+   # Edit .env.local: set SUPABASE_URL, SUPABASE_KEY (same Supabase
+   # project as the backend - see backend/.env.example for where to get them)
    ```
 
 4. **Start dev server**:
@@ -194,6 +203,7 @@ news/
 │   │   ├── components/        # UI components
 │   │   ├── lib/                # API client, utils
 │   │   └── layout.tsx          # Root layout
+│   │   ├── api/                # Route Handlers - GET /api/news, /api/twitter
 │   ├── Dockerfile
 │   └── package.json
 ├── twitter-scraper/             # Agent-Reach based Twitter/X profile scraper
@@ -210,21 +220,26 @@ news/
 
 ## 🔌 API Endpoints
 
-### News
+### Frontend (Next.js, reads - Port 8502)
+
+Backed by Supabase directly (`frontend/app/lib/data.ts`), cached 60s via
+`unstable_cache` so bursts of page loads share one Supabase query instead
+of hitting the database on every request.
 
 - `GET /api/news` - Get articles with filters
   - Query params: `source`, `category`, `limit`, `offset`, `hours`
+- `GET /api/news/[id]` - Get a single article by id
+- `GET /api/twitter` - Get scraped Twitter/X posts
+  - Query params: `account`, `limit`, `offset`
+
+### Backend (FastAPI, writes + admin - Port 8501)
+
+- `GET /api/news` - Get articles with filters (used by scrapers/admin, not the frontend)
 - `GET /api/news/stats` - Get statistics
 - `GET /api/news/search?q=query` - Search articles
-- `POST /api/news` - Create article (internal use)
-
-### Sources
-
+- `POST /api/news` - Create article (called by the RSS/Twitter scrapers)
 - `GET /api/sources` - Get all sources
 - `GET /api/sources/active` - Get active sources
-
-### System
-
 - `GET /` - Root endpoint
 - `GET /health` - Health check
 
@@ -250,7 +265,7 @@ Playwright-based attempt and why it was replaced.
 2. **Celery Workers** execute scrapers (RSS, Twitter)
 3. **Scrapers** fetch articles and normalize data
 4. **Backend** stores RSS articles in Supabase Postgres (SQLAlchemy, deduped by URL) and Twitter posts via the Supabase REST API (deduped by `tweet_id`)
-5. **Frontend** fetches articles via REST API
+5. **Frontend** reads articles/tweets directly from Supabase (its own Route Handlers, cached 60s)
 6. **Users** browse, search, and filter news
 
 ## 🚢 Deployment
@@ -283,7 +298,8 @@ CORS_ORIGINS=https://your-frontend.vercel.app
 
 **Frontend** (Vercel):
 ```
-NEXT_PUBLIC_API_URL=https://your-backend.railway.app
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your_service_role_key
 ```
 
 ## 🛠️ Development
@@ -326,11 +342,11 @@ docker-compose logs backend
 docker-compose restart backend
 ```
 
-### Frontend can't connect to backend?
+### Frontend shows no articles / Supabase errors in the frontend logs?
 
-1. Check `NEXT_PUBLIC_API_URL` in `.env.local`
-2. Verify backend is running: `curl http://localhost:8501/health`
-3. Check CORS settings in `backend/app/core/config.py`
+1. Check `SUPABASE_URL`/`SUPABASE_KEY` in `frontend/.env.local` (server-side only, not `NEXT_PUBLIC_*`)
+2. Confirm they point at the same Supabase project the backend/scrapers write to
+3. Verify directly: `curl "$SUPABASE_URL/rest/v1/articles?select=id&limit=1" -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY"`
 
 ### No articles showing?
 

@@ -126,9 +126,11 @@ docker run -d --name news-celery-beat \
 
 ## Frontend (Next.js)
 
-Depends on: Backend (for the API).
+Reads directly from Supabase (own Route Handlers under `frontend/app/api/`)
+- no dependency on the backend for reads. Needs `SUPABASE_URL`,
+`SUPABASE_KEY` from `.env` at both build and run time.
 
-**Compose (recommended - brings up the full backend stack automatically):**
+**Compose (recommended):**
 ```bash
 docker compose -f docker-compose.frontend.yml up -d --build frontend
 ```
@@ -136,10 +138,11 @@ docker compose -f docker-compose.frontend.yml up -d --build frontend
 **Standalone `docker run`:**
 ```bash
 docker build -t news-frontend ./frontend \
-  --build-arg NEXT_PUBLIC_API_URL=http://localhost:8501
+  --build-arg SUPABASE_URL="$SUPABASE_URL" \
+  --build-arg SUPABASE_KEY="$SUPABASE_KEY"
 docker run -d --name news-frontend -p 8502:3000 \
-  -e NEXT_PUBLIC_API_URL="http://localhost:8501" \
-  -e API_URL_SERVER="http://host.docker.internal:8501" \
+  -e SUPABASE_URL="$SUPABASE_URL" \
+  -e SUPABASE_KEY="$SUPABASE_KEY" \
   news-frontend
 ```
 
