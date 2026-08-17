@@ -32,6 +32,8 @@ export type FeedItem = {
   excerpt: string;
   category: string;
   author: string;
+  /** The publication/feed this article came from, e.g. "TechCrunch". */
+  source: string;
   publishedAt: string;
   /** ISO timestamp used for sorting; publishedAt above is the display string. */
   sortTime: number;
@@ -41,6 +43,34 @@ export type FeedItem = {
 
 function articleHref(id: number) {
   return `/article/${id}`;
+}
+
+/**
+ * The `articles.source` column is currently always the literal string "rss"
+ * (every row comes from the same RSS ingestion pipeline) so it's useless as
+ * a display value. Derive a human-readable publication name instead:
+ * 1. Titles from the Google News-style feed end in " - Publication Name"
+ *    (e.g. "... - MLB.com") - prefer that, it's the cleanest.
+ * 2. Otherwise fall back to the article URL's registrable domain
+ *    (news.google.com redirect links won't produce anything useful here,
+ *    which is why (1) is tried first).
+ * 3. Last resort: the raw `source` column value.
+ */
+export function deriveSourceName(article: ApiArticle): string {
+  const titleMatch = article.title.match(/ - ([^-]+)$/);
+  if (titleMatch) {
+    const candidate = titleMatch[1].trim();
+    if (candidate.length > 1 && candidate.length < 40) return candidate;
+  }
+
+  try {
+    const host = new URL(article.url).hostname.replace(/^www\./, "");
+    if (host && host !== "news.google.com") return host;
+  } catch {
+    // Ignore malformed URLs and fall through to the raw source column.
+  }
+
+  return article.source;
 }
 
 function formatRelativeTime(iso: string | null): string {
@@ -65,8 +95,9 @@ function articleToFeedItem(article: ApiArticle): FeedItem {
     kind: "article",
     title: article.title,
     excerpt: plainContent.slice(0, 220) || article.title,
-    category: article.category ?? article.source,
-    author: article.author ?? article.source,
+    category: article.category ?? deriveSourceName(article),
+    author: article.author ?? deriveSourceName(article),
+    source: deriveSourceName(article),
     publishedAt: formatRelativeTime(timeSource),
     sortTime: new Date(timeSource).getTime() || 0,
     href: articleHref(article.id),

@@ -55,8 +55,13 @@ export default async function Page() {
                   {featured.excerpt}
                 </CardDescription>
               </CardHeader>
-              <CardFooter className="mt-4 p-0 text-sm text-muted-foreground">
-                {featured.author} · {featured.publishedAt}
+              <CardFooter className="mt-4 flex flex-col items-start gap-1 p-0 text-sm text-muted-foreground">
+                <span>
+                  {featured.author} · {featured.publishedAt}
+                </span>
+                <span>
+                  <span className="font-medium">Source:</span> {featured.source}
+                </span>
               </CardFooter>
             </Card>
           </Link>
@@ -77,8 +82,13 @@ export default async function Page() {
                     <CardTitle className="text-lg">{item.title}</CardTitle>
                     <CardDescription>{item.excerpt}</CardDescription>
                   </CardHeader>
-                  <CardFooter className="text-xs text-muted-foreground">
-                    {item.author} · {item.publishedAt}
+                  <CardFooter className="flex flex-col items-start gap-1 text-xs text-muted-foreground">
+                    <span>
+                      {item.author} · {item.publishedAt}
+                    </span>
+                    <span>
+                      <span className="font-medium">Source:</span> {item.source}
+                    </span>
                   </CardFooter>
                 </Card>
               </Link>

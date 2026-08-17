@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Header } from "@/components/header";
 import { SidebarLatest } from "@/components/sidebar-latest";
 import { Badge } from "@/components/ui/badge";
-import { getArticleById } from "@/lib/news";
+import { getArticleById, deriveSourceName } from "@/lib/news";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "";
@@ -30,24 +30,28 @@ export default async function ArticlePage(props: PageProps<"/article/[id]">) {
         <SidebarLatest />
         <main className="flex-1 px-4 py-6 md:px-8">
           <article className="mx-auto max-w-2xl">
-            <Badge className="w-fit">{article.category ?? article.source}</Badge>
+            <Badge className="w-fit">{article.category ?? deriveSourceName(article)}</Badge>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight">
               {article.title}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {article.author ?? article.source} ·{" "}
+              {article.author ?? deriveSourceName(article)} ·{" "}
               {formatDate(article.published_at ?? article.fetched_at)}
             </p>
             <p className="mt-6 text-base leading-relaxed text-foreground">
               {plainContent || "No summary available for this article."}
             </p>
+            <div className="mt-8 flex items-center gap-2 border-t pt-4 text-sm">
+              <span className="font-medium text-muted-foreground">Source:</span>
+              <span className="text-foreground">{deriveSourceName(article)}</span>
+            </div>
             <Link
               href={article.url}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-6 inline-block text-sm font-medium text-primary underline underline-offset-4"
             >
-              Read full article at {article.source} →
+              Read full article at {deriveSourceName(article)} →
             </Link>
           </article>
         </main>
