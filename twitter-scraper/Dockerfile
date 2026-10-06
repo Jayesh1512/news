@@ -1,10 +1,10 @@
 # Twitter Scraper - powered by Agent-Reach (https://github.com/Panniantong/Agent-Reach)
 #
 # Agent-Reach is the "give your AI agent eyes on the internet" project. It
-# installs, health-checks, and routes to upstream platform tools; for
-# Twitter/X it selects twitter-cli. We install Agent-Reach itself and run
-# its own installer (`agent-reach install --channels=twitter`) so the
-# container tracks upstream's chosen backend instead of hardcoding one.
+# health-checks and routes to upstream platform tools; for Twitter/X its
+# selected server backend is twitter-cli. Install that backend directly so a
+# failed check for an unrelated optional Agent-Reach channel cannot fail this
+# image build.
 #
 # NOTE: the real project lives at github.com/Panniantong/agent-reach and is
 # NOT the "agent-reach" package on PyPI (that's an unrelated project) - it
@@ -27,15 +27,15 @@ RUN pipx ensurepath
 # Install Agent-Reach from its GitHub source (not PyPI - see note above).
 RUN pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
 
-# Run Agent-Reach's own installer, scoped to just the twitter channel. This
-# provisions twitter-cli (its currently-selected Twitter backend) the same
-# way Agent-Reach would set it up for any AI agent.
-RUN agent-reach install --env=server --system --channels=twitter
+# Agent-Reach's documented Twitter backend. Pin it in the scraper's Python
+# environment because the local compatibility wrapper imports twitter-cli
+# internals before delegating to its command entrypoint.
+RUN pip install --no-cache-dir "twitter-cli==0.8.5"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY scraper.py .
+COPY scraper.py twitter_cli_runner.py ./
 
 ENV PYTHONUNBUFFERED=1
 

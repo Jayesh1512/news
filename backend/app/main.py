@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api import news, sources, twitter
-from app.db.session import engine, Base
+from app.db.json_store import get_json_store
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# Create the JSON document on first startup.
+get_json_store().ensure_exists()
 
 app = FastAPI(
     title=settings.api_title,

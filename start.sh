@@ -18,36 +18,8 @@ fi
 echo "✅ Docker and Docker Compose are installed"
 echo ""
 
-# Docker Compose reads variable interpolation (${DATABASE_URL}, etc.) from
-# a repo-root .env file, not backend/.env. Required: DATABASE_URL (Supabase
-# Postgres connection string), SUPABASE_URL, SUPABASE_KEY - see
-# backend/.env.example for the full list and where to find these values.
-if [ ! -f .env ]; then
-    echo "❌ No .env file at the repo root."
-    echo "   This project stores everything in Supabase - there is no local"
-    echo "   Postgres container. Create .env with at least:"
-    echo ""
-    echo "     DATABASE_URL=postgresql://postgres:[PASSWORD]@db.<project>.supabase.co:5432/postgres"
-    echo "     SUPABASE_URL=https://<project>.supabase.co"
-    echo "     SUPABASE_KEY=<service_role key>"
-    echo ""
-    echo "   See backend/.env.example for the full list and where to find"
-    echo "   these values in your Supabase project (Settings > Database /"
-    echo "   Settings > API)."
-    exit 1
-fi
-
-if ! grep -q "^DATABASE_URL=" .env || ! grep -q "^SUPABASE_URL=" .env || ! grep -q "^SUPABASE_KEY=" .env; then
-    echo "⚠️  .env exists but may be missing DATABASE_URL, SUPABASE_URL, or"
-    echo "   SUPABASE_KEY. The backend will fail to start without these -"
-    echo "   see backend/.env.example."
-    echo ""
-fi
-
-if [ ! -f frontend/.env.local ]; then
-    echo "📝 Creating frontend/.env.local from template..."
-    cp frontend/.env.example frontend/.env.local
-fi
+# A repo-root .env is optional. Add TWITTER_AUTH_TOKEN and TWITTER_CT0 there
+# to enable X scraping; RSS, the JSON datastore, and the UI work without it.
 
 echo ""
 echo "🚀 Starting all services with Docker Compose..."
@@ -76,7 +48,7 @@ echo "   docker compose logs -f"
 echo ""
 echo "⚙️  Trigger manual scrape:"
 echo "   docker compose -f docker-compose.backend.yml exec backend python -c \"from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()\""
-echo "   docker compose -f docker-compose.backend.yml exec backend python -c \"from app.tasks.scrape import scrape_twitter_accounts; print(scrape_twitter_accounts())\""
+echo "   docker compose -f docker-compose.backend.yml exec backend python -c \"from app.tasks.scrape import scrape_twitter_topic; print(scrape_twitter_topic())\""
 echo ""
 echo "🛑 Stop services:"
 echo "   docker compose down"

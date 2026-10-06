@@ -1,5 +1,5 @@
-// Real news data: reads RSS articles from Supabase (see app/lib/data.ts,
-// which also backs the public app/api/news Route Handler) and normalizes
+// Real news data: reads RSS articles from the FastAPI JSON datastore (see
+// app/lib/data.ts, which also backs the public app/api/news Route Handler) and normalizes
 // them into the feed. Server Components call the data layer directly rather
 // than fetching this app's own Route Handlers - see Next.js docs, "Server
 // Components" caveat under Route Handlers: an extra HTTP round trip and it

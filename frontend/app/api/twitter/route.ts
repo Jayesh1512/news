@@ -6,8 +6,8 @@ import { getTwitterPosts } from "@/lib/data";
  *
  * Query params: account, limit (1-100, default 20), offset (default 0).
  *
- * Reads directly from Supabase's `twitter_posts` table (see app/lib/data.ts),
- * cached for 60s via `unstable_cache`.
+ * Reads from FastAPI's JSON-backed Twitter collection (see app/lib/data.ts),
+ * cached for 60 seconds.
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -15,8 +15,9 @@ export async function GET(request: NextRequest) {
   const limit = clamp(parseIntOr(params.get("limit"), 20), 1, 100);
   const offset = Math.max(parseIntOr(params.get("offset"), 0), 0);
   const account = params.get("account") ?? undefined;
+  const searchQuery = params.get("search_query") ?? undefined;
 
-  const posts = await getTwitterPosts({ account, limit, offset });
+  const posts = await getTwitterPosts({ account, searchQuery, limit, offset });
   return NextResponse.json(posts);
 }
 

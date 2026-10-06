@@ -4,17 +4,13 @@ Exact commands to build and run each container in this project, both via
 Docker Compose (recommended - handles networking, env vars, and
 dependencies for you) and as standalone `docker run` commands.
 
-Database is [Supabase](https://supabase.com) (Postgres + REST API), not a
-container - there's no local Postgres to start. Before running anything,
-create a `.env` file at the repo root (see
-[`backend/.env.example`](./backend/.env.example) for the full list):
+Persistent data is stored in `data/news.json`. For X scraping, create a
+`.env` file at the repo root (see [`backend/.env.example`](./backend/.env.example)):
 
 ```bash
-DATABASE_URL=postgresql://postgres:[PASSWORD]@db.<project>.supabase.co:5432/postgres
-SUPABASE_URL=https://<project>.supabase.co
-SUPABASE_KEY=<service_role key>
 TWITTER_AUTH_TOKEN=<auth_token cookie>
 TWITTER_CT0=<ct0 cookie>
+OPENAI_API_KEY=<OpenAI API key used for profile embeddings>
 ```
 
 Ports are consecutive starting at **8500** - see [`PORTS.md`](./PORTS.md).
@@ -53,8 +49,7 @@ docker run -d --name news-redis -p 8500:6379 redis:7-alpine
 
 ## Backend (FastAPI)
 
-Depends on: Redis, Supabase (external). Also needs `DATABASE_URL`,
-`SUPABASE_URL`, `SUPABASE_KEY` from `.env`.
+Depends on Redis and a writable data volume.
 
 **Compose (recommended - brings up Redis automatically):**
 ```bash
@@ -65,9 +60,8 @@ docker compose -f docker-compose.backend.yml up -d --build backend
 ```bash
 docker build -t news-backend ./backend
 docker run -d --name news-backend -p 8501:8000 \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e SUPABASE_URL="$SUPABASE_URL" \
-  -e SUPABASE_KEY="$SUPABASE_KEY" \
+  -e JSON_DATA_PATH="/data/news.json" \
+  -v "$PWD/data:/data" \
   -e REDIS_URL="redis://host.docker.internal:8500/0" \
   -e CORS_ORIGINS="http://localhost:8502" \
   news-backend
@@ -90,9 +84,8 @@ docker compose -f docker-compose.backend.yml up -d --build celery-worker
 ```bash
 docker build -t news-backend ./backend
 docker run -d --name news-celery-worker \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e SUPABASE_URL="$SUPABASE_URL" \
-  -e SUPABASE_KEY="$SUPABASE_KEY" \
+  -e JSON_DATA_PATH="/data/news.json" \
+  -v "$PWD/data:/data" \
   -e REDIS_URL="redis://host.docker.internal:8500/0" \
   news-backend \
   celery -A app.tasks.scrape worker --loglevel=info
@@ -114,9 +107,8 @@ docker compose -f docker-compose.backend.yml up -d --build celery-beat
 ```bash
 docker build -t news-backend ./backend
 docker run -d --name news-celery-beat \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e SUPABASE_URL="$SUPABASE_URL" \
-  -e SUPABASE_KEY="$SUPABASE_KEY" \
+  -e JSON_DATA_PATH="/data/news.json" \
+  -v "$PWD/data:/data" \
   -e REDIS_URL="redis://host.docker.internal:8500/0" \
   news-backend \
   celery -A app.tasks.scrape beat --loglevel=info
@@ -126,9 +118,7 @@ docker run -d --name news-celery-beat \
 
 ## Frontend (Next.js)
 
-Reads directly from Supabase (own Route Handlers under `frontend/app/api/`)
-- no dependency on the backend for reads. Needs `SUPABASE_URL`,
-`SUPABASE_KEY` from `.env` at both build and run time.
+Reads the JSON datastore through the FastAPI backend.
 
 **Compose (recommended):**
 ```bash
@@ -137,12 +127,9 @@ docker compose -f docker-compose.frontend.yml up -d --build frontend
 
 **Standalone `docker run`:**
 ```bash
-docker build -t news-frontend ./frontend \
-  --build-arg SUPABASE_URL="$SUPABASE_URL" \
-  --build-arg SUPABASE_KEY="$SUPABASE_KEY"
+docker build -t news-frontend ./frontend
 docker run -d --name news-frontend -p 8502:3000 \
-  -e SUPABASE_URL="$SUPABASE_URL" \
-  -e SUPABASE_KEY="$SUPABASE_KEY" \
+  -e BACKEND_URL="http://host.docker.internal:8501" \
   news-frontend
 ```
 
@@ -152,8 +139,8 @@ Access: http://localhost:8502
 
 ## Twitter scraper
 
-Given a list of X/Twitter profile URLs, fetches each profile's most recent
-posts and POSTs them to the backend. Built on
+Searches a configurable X topic, fetches each matching conversation, and
+POSTs the structured batch to the backend. Built on
 [Agent-Reach](https://github.com/Panniantong/Agent-Reach) / `twitter-cli` -
 needs `TWITTER_AUTH_TOKEN`/`TWITTER_CT0` cookie auth (see
 [`twitter-scraper/README.md`](./twitter-scraper/README.md)). No host port.
@@ -168,7 +155,7 @@ docker compose -f docker-compose.twitter-scraper.yml up -d --build twitter-scrap
 docker build -t news-twitter-scraper ./twitter-scraper
 docker run -d --name news-twitter-scraper \
   -e BACKEND_URL="http://host.docker.internal:8501" \
-  -e TWITTER_PROFILE_URLS="https://x.com/elonmusk,https://x.com/OpenAI" \
+  -e TWITTER_SEARCH_QUERY='"drone delivery" lang:en' \
   -e TWITTER_AUTH_TOKEN="$TWITTER_AUTH_TOKEN" \
   -e TWITTER_CT0="$TWITTER_CT0" \
   news-twitter-scraper
@@ -186,7 +173,8 @@ docker compose -f docker-compose.twitter-scraper.yml run --rm twitter-scraper py
 Trigger a scrape manually (via the running backend container):
 ```bash
 docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()"
-docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_twitter_accounts; print(scrape_twitter_accounts())"
+docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_twitter_topic; print(scrape_twitter_topic())"
+docker compose -f docker-compose.backend.yml exec backend python -m app.services.twitter_profile_analysis --topic "Cheap LLM Providers"
 ```
 
 Check Agent-Reach's Twitter channel health from inside the scraper container:

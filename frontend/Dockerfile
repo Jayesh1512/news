@@ -19,12 +19,6 @@ COPY . .
 
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
-# Supabase creds are needed at build time too: page.tsx/[id] etc. are
-# server-rendered and read from Supabase during `next build`.
-ARG SUPABASE_URL
-ARG SUPABASE_KEY
-ENV SUPABASE_URL=${SUPABASE_URL}
-ENV SUPABASE_KEY=${SUPABASE_KEY}
 
 RUN pnpm run build
 

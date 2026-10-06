@@ -5,8 +5,7 @@
 Each container lives in its own compose file so you can start exactly the
 piece you need. Files that depend on another service `include:` it
 automatically, so you always get a working stack even when you only name
-one file. Database is Supabase (Postgres) - there's no local Postgres
-container to start.
+one file. Persistent data is stored in `data/news.json`.
 
 | File                                   | Starts                                                    |
 | --------------------------------------- | ---------------------------------------------------------- |
@@ -37,15 +36,14 @@ All files share the same `news-network` and Compose project name (`news`),
 so services started from different files can always reach each other by
 service name, and `docker compose down` from the root removes everything.
 
-**Before starting anything**, set up `.env` at the repo root (see
-`backend/.env.example`): `DATABASE_URL` (Supabase Postgres connection
-string) and `SUPABASE_URL`/`SUPABASE_KEY` are required.
+For X scraping, set `TWITTER_AUTH_TOKEN` and `TWITTER_CT0` in the repo-root
+`.env`. RSS and the UI need no database credentials.
 
 Access:
 - **Frontend:** http://localhost:8502
 - **Backend API:** http://localhost:8501/docs
 - **Redis:** `redis://localhost:8500/0`
-- **Database:** Supabase (see your project dashboard, not a localhost URL)
+- **Data:** `data/news.json`
 
 ## What You'll See
 
@@ -90,7 +88,10 @@ docker compose -f docker-compose.frontend.yml restart frontend
 docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_rss_feeds; scrape_rss_feeds()"
 
 # Trigger Twitter scraper manually
-docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_twitter_accounts; print(scrape_twitter_accounts())"
+docker compose -f docker-compose.backend.yml exec backend python -c "from app.tasks.scrape import scrape_twitter_topic; print(scrape_twitter_topic())"
+
+# Analyze every author found for the configured topic
+docker compose -f docker-compose.backend.yml exec backend python -m app.services.twitter_profile_analysis --topic "Cheap LLM Providers"
 ```
 
 **Celery not running:**
@@ -99,10 +100,8 @@ docker compose -f docker-compose.backend.yml logs celery-worker
 docker compose -f docker-compose.backend.yml restart celery-worker celery-beat
 ```
 
-**Backend can't connect to the database:**
-- Check `DATABASE_URL` in `.env` - must be a valid Supabase Postgres
-  connection string (Settings > Database > Connection string in your
-  Supabase project)
+**Backend can't write data:**
+- Check that the local `data/` directory is writable.
 - `docker compose -f docker-compose.backend.yml logs backend`
 
 ---

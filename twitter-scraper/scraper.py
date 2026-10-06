@@ -1,17 +1,10 @@
-"""Twitter/X profile scraper powered by Agent-Reach (Panniantong/agent-reach).
+"""Configurable X topic search and conversation scraper.
 
-Given a list of profile URLs (e.g. https://x.com/elonmusk), fetches each
-profile's most recent posts and POSTs them to the backend's /api/news/
-endpoint.
-
-Agent-Reach is installed in the image and used to provision + health-check
-the Twitter backend (currently twitter-cli, per Agent-Reach's own routing -
-see `agent-reach doctor`). The actual per-profile fetch shells out to
-whatever CLI Agent-Reach selected, via `twitter user-posts <handle> --json`.
-
-No browser/Chromium involved: twitter-cli talks to X's internal API directly
-using cookie auth (TWITTER_AUTH_TOKEN + TWITTER_CT0).
+Agent-Reach diagnoses the active Twitter backend (currently twitter-cli).
+Each cycle searches for TWITTER_SEARCH_QUERY, opens every matching post's
+conversation, and sends the normalized batch to FastAPI's JSON datastore.
 """
+
 import asyncio
 import json
 import logging
@@ -19,87 +12,34 @@ import os
 import subprocess
 import sys
 import time
-from urllib.parse import urlparse
+from typing import Any
 
 import httpx
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# Configuration
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
-SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "900"))  # 15 minutes
-POSTS_PER_PROFILE = int(os.getenv("POSTS_PER_PROFILE", "10"))
-REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "5"))  # seconds between profiles
-CLI_TIMEOUT = int(os.getenv("CLI_TIMEOUT", "60"))  # seconds per twitter-cli call
+SEARCH_QUERY = os.getenv("TWITTER_SEARCH_QUERY", "").strip()
+SEARCH_RESULTS = int(os.getenv("TWITTER_SEARCH_RESULTS", "10"))
+SEARCH_TYPE = os.getenv("TWITTER_SEARCH_TYPE", "latest").strip().lower()
+THREAD_REPLIES = int(os.getenv("TWITTER_REPLIES_PER_POST", "20"))
+SCRAPE_INTERVAL = int(os.getenv("SCRAPE_INTERVAL", "900"))
+REQUEST_DELAY = float(os.getenv("TWITTER_REQUEST_DELAY_SECONDS", "2"))
+CLI_TIMEOUT = int(os.getenv("CLI_TIMEOUT", "60"))
 
 TWITTER_AUTH_TOKEN = os.getenv("TWITTER_AUTH_TOKEN", "")
 TWITTER_CT0 = os.getenv("TWITTER_CT0", "")
 
-# Health state file consumed by the Docker HEALTHCHECK (see Dockerfile) and
-# readable by operators to check auth status without grepping logs.
 HEALTH_STATE_PATH = os.getenv("HEALTH_STATE_PATH", "/tmp/scraper_health.json")
-# Consecutive fully-auth-failed scrape cycles before we consider the
-# container unhealthy (surfaced via `docker ps` / HEALTHCHECK).
 AUTH_FAILURE_CYCLES_UNHEALTHY = int(os.getenv("AUTH_FAILURE_CYCLES_UNHEALTHY", "2"))
-
-_PROFILE_URL_ENV_KEYS = ("TWITTER_PROFILE_URLS", "TWITTER_URLS", "TWITTER_ACCOUNTS")
-
-# Structured error codes from twitter-cli that indicate expired/invalid/
-# missing cookies rather than a transient or per-profile problem.
-_AUTH_ERROR_CODES = {"not_authenticated"}
-
-
-def _load_profile_urls() -> list[str]:
-    """Read profile URLs/handles from the first configured env var."""
-    raw = ""
-    for key in _PROFILE_URL_ENV_KEYS:
-        raw = os.getenv(key, "")
-        if raw:
-            break
-    return [item.strip() for item in raw.split(",") if item.strip()]
-
-
-PROFILE_URLS = _load_profile_urls()
-
-
-def handle_from_url(url_or_handle: str) -> str | None:
-    """Extract a bare @handle from a profile URL or a raw handle string."""
-    value = url_or_handle.strip().lstrip("@")
-    if not value:
-        return None
-
-    if "://" not in value and "." not in value.split("/")[0]:
-        # Looks like a bare handle already (no domain component).
-        handle = value.split("/")[0].split("?")[0]
-        return handle or None
-
-    parsed = urlparse(value if "://" in value else f"https://{value}")
-    if parsed.netloc.lower() not in ("x.com", "www.x.com", "twitter.com", "www.twitter.com"):
-        logger.warning("Skipping non-Twitter/X URL: %s", url_or_handle)
-        return None
-
-    path = parsed.path.strip("/")
-    if not path:
-        return None
-    handle = path.split("/")[0]
-
-    reserved = {"i", "home", "explore", "notifications", "messages", "settings", "search"}
-    if handle.lower() in reserved:
-        logger.warning("Skipping non-profile Twitter/X URL: %s", url_or_handle)
-        return None
-
-    return handle
+AUTH_ERROR_CODES = {"not_authenticated"}
+SEARCH_TYPES = {"top", "latest", "photos", "videos"}
 
 
 def log_agent_reach_status() -> None:
-    """Run `agent-reach doctor --json` and log the Twitter channel status.
-
-    Purely diagnostic: doctor only inspects installed backends and explicit
-    credentials, it never triggers a live X request. This gives operators a
-    quick read on whether Agent-Reach considers the Twitter backend healthy
-    without duplicating its channel-selection logic here.
-    """
+    """Log Agent-Reach's diagnostic view without exposing credentials."""
     try:
         result = subprocess.run(
             ["agent-reach", "doctor", "--json"],
@@ -107,44 +47,32 @@ def log_agent_reach_status() -> None:
             text=True,
             timeout=30,
         )
-    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
-        logger.warning("Could not run `agent-reach doctor`: %s", exc)
-        return
-
-    try:
         report = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        logger.warning("agent-reach doctor produced non-JSON output")
+    except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError) as exc:
+        logger.warning("Could not read Agent-Reach status: %s", exc)
         return
 
     twitter_status = report.get("twitter", {})
     logger.info(
-        "Agent-Reach twitter channel: status=%s backend=%s",
+        "Agent-Reach Twitter channel: status=%s backend=%s",
         twitter_status.get("status", "unknown"),
-        twitter_status.get("active_backend") or ", ".join(twitter_status.get("backends", [])),
+        twitter_status.get("active_backend")
+        or ", ".join(twitter_status.get("backends", [])),
     )
-    message = twitter_status.get("message")
-    if message and twitter_status.get("status") != "ok":
-        logger.info("Agent-Reach says: %s", message)
 
 
-def run_twitter_cli(handle: str, count: int) -> tuple[list[dict], str | None]:
-    """Run `twitter user-posts <handle> --json`.
-
-    Returns (tweets, error_code). error_code is None on success, otherwise
-    twitter-cli's structured error code (e.g. "not_authenticated",
-    "rate_limited", "not_found") - see _AUTH_ERROR_CODES for which ones
-    indicate expired/missing cookies specifically.
-    """
+def run_cli(cmd: list[str], label: str) -> tuple[list[dict[str, Any]], str | None]:
+    """Run a structured twitter-cli command and return (items, error_code)."""
     env = os.environ.copy()
     if TWITTER_AUTH_TOKEN:
         env["TWITTER_AUTH_TOKEN"] = TWITTER_AUTH_TOKEN
     if TWITTER_CT0:
         env["TWITTER_CT0"] = TWITTER_CT0
 
-    cmd = ["twitter", "user-posts", handle, "--max", str(count), "--json"]
-    logger.info("Running: %s", " ".join(cmd))
+    if cmd and cmd[0] == "twitter":
+        cmd = [sys.executable, "-m", "twitter_cli_runner", *cmd[1:]]
 
+    logger.info("Running X request: %s", label)
     try:
         result = subprocess.run(
             cmd,
@@ -154,14 +82,13 @@ def run_twitter_cli(handle: str, count: int) -> tuple[list[dict], str | None]:
             env=env,
         )
     except subprocess.TimeoutExpired:
-        logger.error("twitter-cli timed out for @%s", handle)
+        logger.error("twitter-cli timed out for %s", label)
         return [], "timeout"
     except FileNotFoundError:
-        logger.error("`twitter` CLI not found on PATH. Is twitter-cli installed?")
+        logger.error("`twitter` CLI not found on PATH")
         return [], "cli_not_found"
 
     stdout = result.stdout.strip()
-
     if result.returncode != 0:
         error_code = None
         if stdout:
@@ -172,256 +99,239 @@ def run_twitter_cli(handle: str, count: int) -> tuple[list[dict], str | None]:
             except json.JSONDecodeError:
                 pass
         logger.warning(
-            "twitter-cli exited %d for @%s: %s",
+            "twitter-cli exited %d for %s: %s",
             result.returncode,
-            handle,
+            label,
             (result.stderr or stdout).strip()[:500],
         )
         return [], error_code or "unknown_error"
 
     if not stdout:
-        logger.warning("Empty output from twitter-cli for @%s", handle)
         return [], "empty_output"
-
     try:
         payload = json.loads(stdout)
     except json.JSONDecodeError as exc:
-        logger.error("Failed to parse twitter-cli JSON for @%s: %s", handle, exc)
+        logger.error("Invalid twitter-cli JSON for %s: %s", label, exc)
         return [], "parse_error"
 
     if isinstance(payload, dict):
         if payload.get("ok") is False:
-            error = payload.get("error", {})
-            logger.warning(
-                "twitter-cli reported error for @%s: %s (%s)",
-                handle,
-                error.get("message"),
-                error.get("code"),
-            )
-            return [], error.get("code") or "unknown_error"
+            return [], payload.get("error", {}).get("code") or "unknown_error"
         data = payload.get("data")
-        if isinstance(data, list):
-            return data, None
-        return [], None
-
+        return (data if isinstance(data, list) else []), None
     if isinstance(payload, list):
         return payload, None
-
     return [], None
+
+
+def search_posts() -> tuple[list[dict[str, Any]], str | None]:
+    if not SEARCH_QUERY:
+        return [], "missing_search_query"
+    if SEARCH_TYPE not in SEARCH_TYPES:
+        return [], "invalid_search_type"
+    cmd = [
+        "twitter",
+        "search",
+        SEARCH_QUERY,
+        "--type",
+        SEARCH_TYPE,
+        "--max",
+        str(SEARCH_RESULTS),
+        "--json",
+    ]
+    result: tuple[list[dict[str, Any]], str | None] = ([], "unknown_error")
+    for attempt in range(2):
+        result = run_cli(cmd, f'search query "{SEARCH_QUERY}"')
+        if result[1] is None:
+            return result
+        if attempt == 0:
+            logger.warning("X search failed; retrying once (error=%s)", result[1])
+    return result
+
+
+def fetch_thread(tweet_id: str) -> tuple[list[dict[str, Any]], str | None]:
+    items, error_code = run_cli(
+        ["twitter", "tweet", str(tweet_id), "--max", str(THREAD_REPLIES), "--json"],
+        f"thread {tweet_id}",
+    )
+    if error_code:
+        return [], error_code
+    return [item for item in items if str(item.get("id")) != str(tweet_id)], None
+
+
+def _metrics(item: dict[str, Any]) -> dict[str, int]:
+    metrics = item.get("metrics") or {}
+    return {
+        "likes": int(metrics.get("likes") or 0),
+        "retweets": int(metrics.get("retweets") or 0),
+        "replies": int(metrics.get("replies") or 0),
+        "views": int(metrics.get("views") or 0),
+    }
+
+
+def _media_url(item: dict[str, Any]) -> str | None:
+    for media in item.get("media") or []:
+        if media.get("url"):
+            return media["url"]
+    return None
+
+
+def post_to_record(tweet: dict[str, Any]) -> dict[str, Any] | None:
+    tweet_id = tweet.get("id")
+    text = (tweet.get("text") or "").strip()
+    author = tweet.get("author") or {}
+    author_handle = (author.get("screenName") or "").lstrip("@").strip()
+    if not tweet_id or not text or not author_handle:
+        return None
+    return {
+        "tweet_id": str(tweet_id),
+        "account": author_handle,
+        "author": author_handle,
+        "author_name": author.get("name"),
+        "text": text,
+        "url": f"https://x.com/{author_handle}/status/{tweet_id}",
+        "is_retweet": bool(tweet.get("isRetweet", False)),
+        "lang": tweet.get("lang") or None,
+        **_metrics(tweet),
+        "media_url": _media_url(tweet),
+        "published_at": tweet.get("createdAtISO") or tweet.get("createdAt"),
+        "search_query": SEARCH_QUERY,
+        "raw": tweet,
+    }
+
+
+def reply_to_record(
+    reply: dict[str, Any], root_tweet_id: str, root_author: str
+) -> dict[str, Any] | None:
+    reply_id = reply.get("id")
+    text = (reply.get("text") or "").strip()
+    author = reply.get("author") or {}
+    author_handle = (author.get("screenName") or "").lstrip("@").strip()
+    if not reply_id or not text or not author_handle:
+        return None
+    return {
+        "reply_id": str(reply_id),
+        "root_tweet_id": str(root_tweet_id),
+        "account": root_author,
+        "author": author_handle,
+        "author_name": author.get("name"),
+        "text": text,
+        "url": f"https://x.com/{author_handle}/status/{reply_id}",
+        "lang": reply.get("lang") or None,
+        **_metrics(reply),
+        "media_url": _media_url(reply),
+        "published_at": reply.get("createdAtISO") or reply.get("createdAt"),
+        "search_query": SEARCH_QUERY,
+        "is_thread_author": author_handle.casefold() == root_author.casefold(),
+        "raw": reply,
+    }
+
+
+async def ingest_batch(posts: list[dict[str, Any]], replies: list[dict[str, Any]]) -> dict:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{BACKEND_URL}/api/twitter/ingest",
+            json={"posts": posts, "replies": replies},
+        )
+        response.raise_for_status()
+        return response.json()
 
 
 def _read_health_state() -> dict:
     try:
-        with open(HEALTH_STATE_PATH, encoding="utf-8") as f:
-            return json.load(f)
+        with open(HEALTH_STATE_PATH, encoding="utf-8") as state_file:
+            return json.load(state_file)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
 
-def _write_health_state(state: dict) -> None:
-    state["updated_at"] = time.time()
-    try:
-        with open(HEALTH_STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump(state, f)
-    except OSError as exc:
-        logger.warning("Could not write health state to %s: %s", HEALTH_STATE_PATH, exc)
-
-
-def record_cycle_result(auth_failure_count: int, total_profiles: int) -> None:
-    """Track consecutive fully-auth-failed cycles and alert loudly when the
-    cookies look expired/invalid (as opposed to one profile having an issue).
-    """
+def _write_health_state(error_code: str | None) -> None:
     state = _read_health_state()
-    consecutive = state.get("consecutive_auth_failure_cycles", 0)
-
-    fully_auth_failed = total_profiles > 0 and auth_failure_count == total_profiles
-    if fully_auth_failed:
-        consecutive += 1
-    else:
-        consecutive = 0
-
-    state["consecutive_auth_failure_cycles"] = consecutive
-    state["last_cycle_auth_failures"] = auth_failure_count
-    state["last_cycle_total_profiles"] = total_profiles
-    state["healthy"] = consecutive < AUTH_FAILURE_CYCLES_UNHEALTHY
-    _write_health_state(state)
-
-    if fully_auth_failed:
-        logger.warning(
-            "AUTH CHECK: every profile failed with an auth error this cycle "
-            "(%d/%d). Consecutive failed cycles: %d.",
-            auth_failure_count,
-            total_profiles,
-            consecutive,
-        )
-    if consecutive >= AUTH_FAILURE_CYCLES_UNHEALTHY:
-        logger.error(
-            "=" * 70 + "\n"
-            "TWITTER COOKIES LIKELY EXPIRED OR INVALID\n"
-            "Every profile has failed with an authentication error for %d "
-            "consecutive scrape cycles. TWITTER_AUTH_TOKEN / TWITTER_CT0 "
-            "need to be re-exported from a logged-in x.com session "
-            "(Cookie-Editor) and set in .env, then restart this container.\n"
-            "See twitter-scraper/README.md > Authentication.\n" + "=" * 70,
-            consecutive,
-        )
+    consecutive = int(state.get("consecutive_auth_failure_cycles", 0))
+    consecutive = consecutive + 1 if error_code in AUTH_ERROR_CODES else 0
+    state.update(
+        {
+            "consecutive_auth_failure_cycles": consecutive,
+            "last_error_code": error_code,
+            "healthy": consecutive < AUTH_FAILURE_CYCLES_UNHEALTHY,
+            "updated_at": time.time(),
+        }
+    )
+    try:
+        with open(HEALTH_STATE_PATH, "w", encoding="utf-8") as state_file:
+            json.dump(state, state_file)
+    except OSError as exc:
+        logger.warning("Could not write health state: %s", exc)
 
 
-def tweet_to_article(tweet: dict, handle: str) -> dict | None:
-    """Convert a twitter-cli tweet dict into the backend's article schema."""
-    tweet_id = tweet.get("id")
-    text = (tweet.get("text") or "").strip()
-    if not tweet_id or not text:
-        return None
+async def scrape_topic() -> dict[str, Any]:
+    if not SEARCH_QUERY:
+        logger.warning("TWITTER_SEARCH_QUERY is empty; nothing to search")
+        return {"status": "skipped", "error_code": "missing_search_query"}
 
-    author = tweet.get("author") or {}
-    screen_name = author.get("screenName") or handle
+    tweets, error_code = await asyncio.to_thread(search_posts)
+    _write_health_state(error_code)
+    if error_code:
+        return {"status": "search_failed", "error_code": error_code}
 
-    title = text if len(text) <= 100 else f"{text[:100]}..."
-    title = f"@{screen_name}: {title}"
-
-    media = tweet.get("media") or []
-    image_url = None
-    for item in media:
-        if item.get("type") == "photo" and item.get("url"):
-            image_url = item["url"]
-            break
-
-    published_at = tweet.get("createdAtISO") or tweet.get("createdAt")
-
-    return {
-        "title": title,
-        "content": text,
-        "url": f"https://x.com/{screen_name}/status/{tweet_id}",
-        "source": "twitter",
-        "author": screen_name,
-        "published_at": published_at,
-        "category": "twitter",
-        "image_url": image_url,
-    }
-
-
-async def save_articles_to_backend(articles: list[dict]) -> int:
-    """POST each article to the backend API. Returns count of newly saved articles."""
-    if not articles:
-        return 0
-
-    saved = 0
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for article in articles:
-            try:
-                response = await client.post(f"{BACKEND_URL}/api/news/", json=article)
-                if response.status_code == 201:
-                    saved += 1
-                    logger.info("Saved: %s", article["title"][:60])
-                elif response.status_code == 400:
-                    logger.debug("Already exists: %s", article["url"])
-                else:
-                    logger.warning(
-                        "Failed to save (%d): %s", response.status_code, article["url"]
-                    )
-            except httpx.HTTPError as exc:
-                logger.error("Error posting article to backend: %s", exc)
-
-    return saved
-
-
-async def scrape_all_profiles() -> None:
-    if not PROFILE_URLS:
-        logger.warning("No profile URLs configured (TWITTER_PROFILE_URLS is empty). Nothing to do.")
-        return
-
-    all_articles: list[dict] = []
-    valid_handles: list[str] = []
-    auth_failures = 0
-
-    for raw_url in PROFILE_URLS:
-        handle = handle_from_url(raw_url)
-        if handle:
-            valid_handles.append(handle)
-
-    for i, handle in enumerate(valid_handles):
-        tweets, error_code = await asyncio.to_thread(run_twitter_cli, handle, POSTS_PER_PROFILE)
-
-        if error_code in _AUTH_ERROR_CODES:
-            auth_failures += 1
-        logger.info("Fetched %d posts for @%s", len(tweets), handle)
-
-        for tweet in tweets:
-            article = tweet_to_article(tweet, handle)
-            if article:
-                all_articles.append(article)
-
-        if i < len(valid_handles) - 1:
+    posts = [record for tweet in tweets if (record := post_to_record(tweet))]
+    replies: list[dict[str, Any]] = []
+    thread_errors: dict[str, str] = {}
+    for index, post in enumerate(posts):
+        thread, thread_error = await asyncio.to_thread(fetch_thread, post["tweet_id"])
+        if thread_error:
+            thread_errors[post["tweet_id"]] = thread_error
+        else:
+            replies.extend(
+                record
+                for item in thread
+                if (record := reply_to_record(item, post["tweet_id"], post["author"]))
+            )
+        if index < len(posts) - 1:
             await asyncio.sleep(REQUEST_DELAY)
 
-    if valid_handles:
-        record_cycle_result(auth_failures, len(valid_handles))
-
-    logger.info("Total posts scraped: %d", len(all_articles))
-    saved = await save_articles_to_backend(all_articles)
-    logger.info("Saved %d new posts to backend", saved)
+    ingested = await ingest_batch(posts, replies)
+    result = {
+        "status": "success",
+        "search_query": SEARCH_QUERY,
+        "matches": len(posts),
+        "conversation_replies": len(replies),
+        "thread_errors": thread_errors,
+        **ingested,
+    }
+    logger.info("X topic scrape complete: %s", result)
+    return result
 
 
 def check_health() -> int:
-    """Exit 0 if healthy, 1 if unhealthy. Used by the Docker HEALTHCHECK.
-
-    Before the first scrape cycle completes (no state file yet), reports
-    healthy - we don't want the container flagged unhealthy just because it
-    hasn't scraped yet.
-    """
     state = _read_health_state()
-    if not state:
-        print("No scrape cycles completed yet.")
+    if not state or state.get("healthy", True):
+        print("OK: X topic scraper is healthy")
         return 0
-    if state.get("healthy", True):
-        print(
-            "OK: %d/%d profiles auth-failed last cycle, %d consecutive fully-failed cycles."
-            % (
-                state.get("last_cycle_auth_failures", 0),
-                state.get("last_cycle_total_profiles", 0),
-                state.get("consecutive_auth_failure_cycles", 0),
-            )
-        )
-        return 0
-    print(
-        "UNHEALTHY: %d consecutive cycles where every profile failed auth. "
-        "Twitter cookies likely expired - see logs."
-        % state.get("consecutive_auth_failure_cycles", 0)
-    )
+    print("UNHEALTHY: X cookies failed authentication repeatedly")
     return 1
 
 
 async def main() -> None:
-    logger.info("Twitter scraper (Agent-Reach) started.")
-    logger.info("Profiles: %s", ", ".join(PROFILE_URLS) or "(none configured)")
-    logger.info("Posts per profile: %d, interval: %ds", POSTS_PER_PROFILE, SCRAPE_INTERVAL)
-
+    logger.info("X topic scraper started: query=%r type=%s", SEARCH_QUERY, SEARCH_TYPE)
     await asyncio.to_thread(log_agent_reach_status)
-
     if not TWITTER_AUTH_TOKEN or not TWITTER_CT0:
-        logger.warning(
-            "TWITTER_AUTH_TOKEN / TWITTER_CT0 not set. The Agent-Reach Twitter "
-            "backend requires cookie auth and cannot fall back to a browser "
-            "inside this container, so requests will fail until these are "
-            "configured."
-        )
+        logger.warning("TWITTER_AUTH_TOKEN / TWITTER_CT0 are not set")
 
     while True:
         try:
-            await scrape_all_profiles()
+            await scrape_topic()
         except Exception:
-            logger.exception("Scraping run failed")
-
-        logger.info("Waiting %ds until next scrape...", SCRAPE_INTERVAL)
+            logger.exception("X topic scrape failed")
+        logger.info("Waiting %ds until next search", SCRAPE_INTERVAL)
         await asyncio.sleep(SCRAPE_INTERVAL)
 
 
 if __name__ == "__main__":
     if "--healthcheck" in sys.argv:
         sys.exit(check_health())
-    elif "--once" in sys.argv:
+    if "--once" in sys.argv:
         log_agent_reach_status()
-        asyncio.run(scrape_all_profiles())
+        print(json.dumps(asyncio.run(scrape_topic()), indent=2))
     else:
         asyncio.run(main())

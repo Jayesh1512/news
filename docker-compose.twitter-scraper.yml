@@ -1,5 +1,5 @@
-# Twitter/X scraper (twitter-cli based). Given a list of profile URLs, fetches
-# each profile's most recent posts and POSTs them to the backend.
+# Twitter/X topic scraper. Searches the configured query and stores matching
+# posts plus their conversation threads through the backend.
 #
 # Requires X login cookies: set TWITTER_AUTH_TOKEN and TWITTER_CT0 below (or
 # in a .env file at the repo root - see twitter-scraper/README.md for how to
@@ -17,6 +17,12 @@ include:
   - docker-compose.backend.yml
 
 services:
+  # This optional runner replaces the Celery X job to avoid duplicate X
+  # searches when this compose file is used.
+  celery-worker:
+    environment:
+      TWITTER_TOPIC_SCRAPER_ENABLED: "false"
+
   twitter-scraper:
     build:
       context: ./twitter-scraper
@@ -24,12 +30,12 @@ services:
     container_name: news-twitter-scraper
     environment:
       BACKEND_URL: http://backend:8000  # internal network, not localhost
-      # Comma-separated list of X/Twitter profile URLs (or bare handles) to
-      # fetch the most recent posts from.
-      TWITTER_PROFILE_URLS: https://x.com/elonmusk,https://x.com/OpenAI,https://x.com/verge,https://x.com/techcrunch,https://x.com/wired
-      POSTS_PER_PROFILE: 10
+      TWITTER_SEARCH_QUERY: ${TWITTER_SEARCH_QUERY:-}
+      TWITTER_SEARCH_RESULTS: ${TWITTER_SEARCH_RESULTS:-10}
+      TWITTER_SEARCH_TYPE: ${TWITTER_SEARCH_TYPE:-latest}
+      TWITTER_REPLIES_PER_POST: ${TWITTER_REPLIES_PER_POST:-20}
       SCRAPE_INTERVAL: 900  # 15 minutes
-      REQUEST_DELAY: 5      # seconds between profiles, rate-limit friendly
+      TWITTER_REQUEST_DELAY_SECONDS: ${TWITTER_REQUEST_DELAY_SECONDS:-2}
       # Required for twitter-cli - export from a logged-in x.com session.
       TWITTER_AUTH_TOKEN: ${TWITTER_AUTH_TOKEN:-}
       TWITTER_CT0: ${TWITTER_CT0:-}

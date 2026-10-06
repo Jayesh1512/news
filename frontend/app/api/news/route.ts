@@ -7,8 +7,8 @@ import { getArticles } from "@/lib/data";
  * Query params: source, category, limit (1-100, default 20),
  * offset (default 0), hours (1-168, default 24).
  *
- * Reads directly from Supabase (see app/lib/data.ts), cached for 60s via
- * `unstable_cache` so bursts of requests don't each hit the database.
+ * Reads from FastAPI's shared JSON datastore (see app/lib/data.ts). Backend
+ * fetches are cached for 60 seconds.
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;

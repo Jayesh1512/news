@@ -1,9 +1,6 @@
 # Full stack: redis, backend, celery worker, celery beat, twitter-scraper,
-# frontend. Database is Supabase (Postgres) - no local postgres container.
+# frontend. Persistent application data lives in ./data/news.json.
 # Just wires together the per-service files.
-#
-# Requires DATABASE_URL (Supabase Postgres connection string) and
-# SUPABASE_URL/SUPABASE_KEY set in a repo-root .env - see backend/.env.example.
 #
 # Start everything:
 #   docker compose up -d --build

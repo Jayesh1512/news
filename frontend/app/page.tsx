@@ -11,6 +11,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { getFeed } from "@/lib/news";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const feed = await getFeed();
 

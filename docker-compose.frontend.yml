@@ -1,30 +1,27 @@
-# Next.js frontend. Talks to Supabase directly (its own backend, via Next.js
-# Route Handlers under app/api/) - it no longer depends on the FastAPI
-# backend container for reads.
+# Next.js frontend. Reads the JSON datastore through the FastAPI backend.
 #
 # Start on its own:
 #   docker compose -f docker-compose.frontend.yml up -d --build
 #
-# Requires SUPABASE_URL/SUPABASE_KEY in the root .env (same Supabase project
-# the backend/scrapers write to). Included automatically by the root
-# docker-compose.yml for a full-stack run.
+# Included automatically by the root docker-compose.yml for a full-stack run.
 
 name: news
+
+include:
+  - docker-compose.backend.yml
 
 services:
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        SUPABASE_URL: ${SUPABASE_URL}
-        SUPABASE_KEY: ${SUPABASE_KEY}
     container_name: news-frontend
     ports:
       - "8502:3000"
     environment:
-      SUPABASE_URL: ${SUPABASE_URL}
-      SUPABASE_KEY: ${SUPABASE_KEY}
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      - backend
     networks:
       - news-network
 

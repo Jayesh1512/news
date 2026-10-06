@@ -2,7 +2,7 @@
 
 All host ports are consecutive, starting at **8500**, to avoid clashing
 with common local dev ports (3000, 5432, 6379, 8000, etc.) and tools like
-OrbStack. There is no local Postgres port - the database is Supabase.
+OrbStack. Persistence uses the local `data/news.json` file.
 
 ## Services
 
@@ -16,10 +16,8 @@ OrbStack. There is no local Postgres port - the database is Supabase.
 The Twitter scraper (`twitter-scraper/`) doesn't expose any host port - it
 only talks to the backend over the internal Docker network.
 
-**Database:** Supabase (Postgres), not a local container. Both RSS
-articles (via `DATABASE_URL`, a direct Postgres connection) and scraped
-Twitter posts (via `SUPABASE_URL`/`SUPABASE_KEY`, the Supabase REST API)
-live there. See `backend/.env.example`.
+**Data:** RSS articles, sources, X posts, and X replies are stored in
+`data/news.json` and exposed through the backend API.
 
 ## Twitter Scraper
 
@@ -34,13 +32,11 @@ and any `localhost:<port>` references in the same file:
 - `docker-compose.redis.yml`: `8500:6379`
 - `docker-compose.backend.yml`: `8501:8000`, plus `CORS_ORIGINS` (must match
   the frontend's host port)
-- `docker-compose.frontend.yml`: `8502:3000`. The frontend reads Supabase
-  directly (`SUPABASE_URL`/`SUPABASE_KEY`), so it has no backend port to
-  keep in sync.
+- `docker-compose.frontend.yml`: `8502:3000`. The frontend uses the backend
+  API on port 8501.
 
-Also update the matching defaults in `backend/.env.example`,
-`backend/app/core/config.py`, and `frontend/.env.example` if you want local
-(non-Docker) dev to use the same ports.
+Also update the matching defaults in `backend/.env.example` and
+`backend/app/core/config.py` if you want local development to use the same ports.
 
 Then rebuild: `docker compose up --build`
 

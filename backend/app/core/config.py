@@ -1,5 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+from pathlib import Path
+
+
+_DEFAULT_DATA_PATH = str(Path(__file__).resolve().parents[3] / "data" / "news.json")
 
 
 class Settings(BaseSettings):
@@ -7,6 +11,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # API Settings
@@ -21,17 +26,8 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]
     
-    # Database - Supabase Postgres connection string, no local Postgres.
-    # Empty by default; must be set in .env (see backend/.env.example) or
-    # RSS article storage (app/db/session.py) won't be able to connect.
-    database_url: str = ""
-
-    # Supabase client (used to store scraped Twitter/X posts via
-    # supabase-py / REST API, separate from database_url above which is a
-    # direct Postgres connection used by SQLAlchemy)
-    supabase_url: str = ""
-    supabase_key: str = ""  # service_role key (needed for server-side writes)
-    supabase_twitter_table: str = "twitter_posts"
+    # One local datastore shared by the API and scraper processes.
+    json_data_path: str = _DEFAULT_DATA_PATH
 
     # Redis
     redis_url: str = "redis://localhost:8500/0"
@@ -39,8 +35,32 @@ class Settings(BaseSettings):
     # Twitter
     twitter_auth_token: str = ""
     twitter_ct0: str = ""
-    twitter_posts_per_account: int = 5
+    # X search syntax is accepted verbatim, e.g. '"drone delivery" lang:en'.
+    # Empty means the scheduled X task is intentionally disabled.
+    twitter_search_query: str = ""
+    twitter_topic_scraper_enabled: bool = True
+    twitter_search_results: int = 10
+    twitter_search_type: str = "latest"
     twitter_cli_timeout_seconds: int = 60
+    twitter_request_delay_seconds: float = 2.0
+    # Max conversation replies to pull per matching search result.
+    twitter_replies_per_post: int = 20
+
+    # Profile discovery. Candidate authors come from every stored root post
+    # and reply for the topic, then their recent timelines are compared with
+    # the topic using local embedding cosine similarity.
+    twitter_profile_analysis_after_scrape: bool = False
+    twitter_profile_topic: str = ""
+    twitter_profile_topic_description: str = ""
+    twitter_profile_posts_per_author: int = 15
+    twitter_profile_similarity_threshold: float = 0.60
+    twitter_profile_embedding_model: str = "text-embedding-3-large"
+    twitter_profile_embedding_dimensions: int = 3072
+    twitter_profile_summary_model: str = "gpt-6-luna"
+    twitter_profile_request_delay_seconds: float = 2.0
+
+    # OpenAI
+    openai_api_key: str = ""
 
     # Scraping
     scrape_interval_minutes: int = 15

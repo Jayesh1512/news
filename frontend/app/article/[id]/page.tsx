@@ -5,6 +5,8 @@ import { SidebarLatest } from "@/components/sidebar-latest";
 import { Badge } from "@/components/ui/badge";
 import { getArticleById, deriveSourceName } from "@/lib/news";
 
+export const dynamic = "force-dynamic";
+
 function formatDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);

@@ -127,4 +127,34 @@
   html {
     @apply font-sans;
   }
+
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 34%, transparent);
+    color: var(--foreground);
+  }
+
+  * {
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 45%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+.x-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.x-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.x-scrollbar::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--muted-foreground) 48%, transparent);
+  background-clip: padding-box;
+}
+
+.x-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--muted-foreground) 68%, transparent);
+  background-clip: padding-box;
 }
